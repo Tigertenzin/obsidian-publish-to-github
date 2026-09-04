@@ -323,3 +323,69 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+
+/* Autocomplete */
+
+.ptg-suggest {
+	position: fixed;
+	z-index: var(--layer-menu, 1000);
+	max-height: 14rem;
+	overflow-y: auto;
+	padding: 0.25em;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background-color: var(--background-secondary);
+	box-shadow: var(--shadow-s);
+}
+
+.ptg-suggest-item {
+	padding: 0.3em 0.6em;
+	border-radius: var(--radius-s);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	cursor: pointer;
+}
+
+.ptg-suggest-item:hover,
+.ptg-suggest-item.is-selected {
+	background-color: var(--background-modifier-hover);
+}
+
+/* Clickable known values for list properties */
+
+.ptg-chips {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.3em;
+	margin-top: 0.4em;
+}
+
+.ptg-chips-label {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+.ptg-chip {
+	padding: 0.1em 0.55em;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-l);
+	background-color: var(--background-primary);
+	box-shadow: none;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	cursor: pointer;
+}
+
+.ptg-chip:hover {
+	background-color: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.ptg-remove-input {
+	width: 100%;
+	min-width: 12rem;
+}

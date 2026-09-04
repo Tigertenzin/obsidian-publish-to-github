@@ -13,6 +13,7 @@ import {
 	PublishToGithubSettingTab,
 	type PublishToGithubSettings,
 } from "./settings";
+import { buildVaultIndex } from "./vault";
 import {
 	applyBreak,
 	buildOutput,
@@ -51,6 +52,15 @@ export default class PublishToGithubPlugin extends Plugin {
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+
+		// Older versions stored the removal list as one newline-joined string.
+		const removals = this.settings.propertiesToRemove as unknown;
+		if (typeof removals === "string") {
+			this.settings.propertiesToRemove = removals
+				.split("\n")
+				.map((line) => line.trim())
+				.filter((line) => line.length > 0);
+		}
 	}
 
 	async saveSettings() {
@@ -114,6 +124,7 @@ export default class PublishToGithubPlugin extends Plugin {
 			attachmentUrlPrefix: this.settings.attachmentUrlPrefix,
 			breakResult,
 			frontmatterError: note.frontmatterError,
+			index: buildVaultIndex(this.app),
 		};
 
 		this.openReview(file, note, context);

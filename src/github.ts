@@ -65,6 +65,34 @@ export class GithubClient {
 		return { fullName: repoResponse.json?.full_name ?? `${owner}/${repo}`, branch };
 	}
 
+	/**
+	 * Every folder on the branch, for the folder pickers in the settings. One
+	 * recursive tree call rather than walking the contents API directory by
+	 * directory; a repository large enough to truncate returns what fitted.
+	 */
+	async listFolders(): Promise<string[]> {
+		this.assertConfigured();
+		const { owner, repo, branch } = this.settings;
+
+		const response = await this.request(
+			"GET",
+			`/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`
+		);
+
+		if (response.status === 404) {
+			throw new Error(`Branch "${branch}" not found in ${owner}/${repo}.`);
+		}
+		this.assertOk(response, "list the folders in the repository");
+
+		const tree = response.json?.tree;
+		if (!Array.isArray(tree)) return [];
+
+		return tree
+			.filter((entry) => entry?.type === "tree" && typeof entry.path === "string")
+			.map((entry) => entry.path as string)
+			.sort((a, b) => a.localeCompare(b));
+	}
+
 	/** Reads the file at a path on the branch, or null when nothing is there yet. */
 	async getFile(path: string): Promise<RemoteFile | null> {
 		this.assertConfigured();

@@ -13,6 +13,8 @@ import {
 } from "obsidian";
 import { attachmentUrl, type Embed } from "./attachments";
 import { diffLines, type DiffLine, type DiffResult } from "./diff";
+import { TextSuggest } from "./suggest";
+import type { VaultIndex } from "./vault";
 import type { RemoteFile } from "./github";
 import { PROPERTY_TYPE_LABELS, type PropertyType } from "./settings";
 import {
@@ -69,6 +71,8 @@ export interface ReviewContext {
 	attachmentUrlPrefix: string;
 	breakResult: BreakResult;
 	frontmatterError: string | null;
+	/** Property names and values already used in the vault, for autocomplete. */
+	index: VaultIndex;
 }
 
 /**
@@ -86,6 +90,7 @@ export class ReviewModal extends Modal {
 	/** Guards against a slow destination check overwriting a newer one. */
 	private lookupSeq = 0;
 	private lookupTimer: number | null = null;
+	private suggests: TextSuggest[] = [];
 
 	constructor(
 		app: App,
@@ -374,6 +379,8 @@ export class ReviewModal extends Modal {
 	}
 
 	private renderProperties(): void {
+		for (const suggest of this.suggests) suggest.destroy();
+		this.suggests.length = 0;
 		this.listEl.empty();
 
 		if (this.context.properties.length === 0) {
@@ -400,6 +407,14 @@ export class ReviewModal extends Modal {
 				property.key = value;
 			});
 		key.inputEl.addClass("ptg-key-input");
+		// Names already in the vault, minus the ones this note is already writing.
+		this.suggest(key.inputEl, () =>
+			this.context.index.names.filter(
+				(name) =>
+					name === property.key ||
+					!this.context.properties.some((other) => other !== property && other.key === name)
+			)
+		);
 
 		const dropdown = new DropdownComponent(head);
 		for (const [value, label] of Object.entries(PROPERTY_TYPE_LABELS)) {
@@ -464,6 +479,7 @@ export class ReviewModal extends Modal {
 					});
 				textarea.inputEl.rows = 3;
 				textarea.inputEl.addClass("ptg-value-input");
+				this.renderValueChips(container, property);
 				return;
 			}
 
@@ -486,8 +502,52 @@ export class ReviewModal extends Modal {
 					property.value = parseValue(value, "text");
 				});
 				text.inputEl.addClass("ptg-value-input");
+				this.suggest(text.inputEl, () => this.context.index.valuesFor(property.key));
 			}
 		}
+	}
+
+	/**
+	 * A list is edited as a textarea, where a dropdown would fight with typing.
+	 * Values already used for this property are offered as chips to click instead.
+	 */
+	private renderValueChips(container: HTMLElement, property: OutgoingProperty): void {
+		const known = this.context.index.valuesFor(property.key);
+		if (known.length === 0) return;
+
+		const textarea = container.querySelector("textarea");
+		if (!(textarea instanceof HTMLTextAreaElement)) return;
+
+		const chips = container.createDiv({ cls: "ptg-chips" });
+
+		const render = () => {
+			chips.empty();
+			const current = new Set(Array.isArray(property.value) ? property.value : []);
+			const available = known.filter((value) => !current.has(value)).slice(0, 12);
+			if (available.length === 0) return;
+
+			chips.createSpan({ cls: "ptg-chips-label", text: "Add:" });
+			for (const value of available) {
+				const chip = chips.createEl("button", { cls: "ptg-chip", text: value });
+				chip.type = "button";
+				chip.onclick = () => {
+					const next = [...(Array.isArray(property.value) ? property.value : []), value];
+					property.value = next;
+					textarea.value = next.join("\n");
+					render();
+				};
+			}
+		};
+
+		render();
+	}
+
+	/** Attaches autocomplete to an input and keeps it for cleanup. */
+	private suggest(
+		input: HTMLInputElement,
+		source: (query: string) => string[] | Promise<string[]>
+	): void {
+		this.suggests.push(new TextSuggest(input, source));
 	}
 
 	private renderRemoved(): void {
@@ -522,6 +582,8 @@ export class ReviewModal extends Modal {
 
 	onClose(): void {
 		if (this.lookupTimer !== null) window.clearTimeout(this.lookupTimer);
+		for (const suggest of this.suggests) suggest.destroy();
+		this.suggests.length = 0;
 		this.contentEl.empty();
 	}
 }

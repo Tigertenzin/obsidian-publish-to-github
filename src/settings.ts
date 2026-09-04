@@ -1,6 +1,8 @@
 import { App, PluginSettingTab, Setting, Notice } from "obsidian";
 import type { ImageSizeStyle } from "./attachments";
 import type PublishToGithubPlugin from "./main";
+import { TextSuggest } from "./suggest";
+import { buildVaultIndex, type VaultIndex } from "./vault";
 
 /** Property value types, mirroring Obsidian's own property types. */
 export type PropertyType = "text" | "number" | "checkbox" | "date" | "datetime" | "list";
@@ -72,6 +74,10 @@ export const DEFAULT_SETTINGS: PublishToGithubSettings = {
 
 export class PublishToGithubSettingTab extends PluginSettingTab {
 	plugin: PublishToGithubPlugin;
+	private index: VaultIndex = { names: [], valuesFor: () => [] };
+	private suggests: TextSuggest[] = [];
+	/** Repository folders, fetched once per settings visit when first needed. */
+	private folders: Promise<string[]> | null = null;
 
 	constructor(app: App, plugin: PublishToGithubPlugin) {
 		super(app, plugin);
@@ -80,13 +86,45 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 
 	display(): void {
 		const { containerEl } = this;
+		this.teardownSuggests();
 		containerEl.empty();
+
+		this.index = buildVaultIndex(this.app);
+		this.folders = null;
 
 		this.renderConnection(containerEl);
 		this.renderPropertiesToAdd(containerEl);
 		this.renderPropertiesToRemove(containerEl);
 		this.renderContentBreak(containerEl);
 		this.renderAttachments(containerEl);
+	}
+
+	hide(): void {
+		this.teardownSuggests();
+	}
+
+	private teardownSuggests(): void {
+		for (const suggest of this.suggests) suggest.destroy();
+		this.suggests.length = 0;
+	}
+
+	/** Attaches autocomplete to an input and keeps it for cleanup. */
+	private suggest(
+		input: HTMLInputElement,
+		source: (query: string) => string[] | Promise<string[]>
+	): void {
+		this.suggests.push(new TextSuggest(input, source));
+	}
+
+	/** Folder names in the repository, loaded lazily and reused. */
+	private repoFolders(): Promise<string[]> {
+		if (!this.folders) {
+			this.folders = this.plugin
+				.github()
+				.listFolders()
+				.catch(() => []);
+		}
+		return this.folders;
 	}
 
 	private async save() {
@@ -151,16 +189,19 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Target folder")
-			.setDesc("Folder inside the repository to publish into. Leave empty for the repository root.")
-			.addText((text) =>
+			.setDesc(
+				"Folder inside the repository to publish into. Focus the field to browse the folders that exist on the branch. Leave empty for the repository root."
+			)
+			.addText((text) => {
 				text
 					.setPlaceholder("content/posts")
 					.setValue(this.plugin.settings.targetFolder)
 					.onChange(async (value) => {
 						this.plugin.settings.targetFolder = value.trim();
 						await this.save();
-					})
-			);
+					});
+				this.suggest(text.inputEl, () => this.repoFolders());
+			});
 
 		new Setting(containerEl)
 			.setName("Mirror vault folder structure")
@@ -238,15 +279,16 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 		this.plugin.settings.propertiesToAdd.forEach((property, index) => {
 			const setting = new Setting(containerEl)
 				.setClass("ptg-property-row")
-				.addText((text) =>
+				.addText((text) => {
 					text
 						.setPlaceholder("property name")
 						.setValue(property.key)
 						.onChange(async (value) => {
 							property.key = value.trim();
 							await this.save();
-						})
-				)
+						});
+					this.suggest(text.inputEl, () => this.index.names);
+				})
 				.addDropdown((dropdown) => {
 					for (const [value, label] of Object.entries(PROPERTY_TYPE_LABELS)) {
 						dropdown.addOption(value, label);
@@ -257,15 +299,18 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 						this.display();
 					});
 				})
-				.addText((text) =>
+				.addText((text) => {
 					text
 						.setPlaceholder(defaultValuePlaceholder(property.type))
 						.setValue(property.defaultValue)
 						.onChange(async (value) => {
 							property.defaultValue = value;
 							await this.save();
-						})
-				);
+						});
+					this.suggest(text.inputEl, () =>
+						property.key.length > 0 ? this.index.valuesFor(property.key) : []
+					);
+				});
 
 			setting.addToggle((toggle) =>
 				toggle
@@ -298,21 +343,58 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 	private renderPropertiesToRemove(containerEl: HTMLElement) {
 		new Setting(containerEl)
 			.setName("Properties to remove")
-			.setDesc("Stripped from the published copy. One property name per line.")
-			.setHeading();
+			.setDesc("Stripped from the published copy when the note carries them.")
+			.setHeading()
+			.addButton((button) =>
+				button
+					.setButtonText("Add property")
+					.setCta()
+					.onClick(async () => {
+						this.plugin.settings.propertiesToRemove.push("");
+						await this.save();
+						this.display();
+					})
+			);
 
-		new Setting(containerEl).setClass("ptg-textarea-row").addTextArea((textarea) => {
-			textarea.inputEl.rows = 5;
-			textarea
-				.setPlaceholder("draft\nprivate-notes")
-				.setValue(this.plugin.settings.propertiesToRemove.join("\n"))
-				.onChange(async (value) => {
-					this.plugin.settings.propertiesToRemove = value
-						.split("\n")
-						.map((line) => line.trim())
-						.filter((line) => line.length > 0);
-					await this.save();
-				});
+		if (this.plugin.settings.propertiesToRemove.length === 0) {
+			containerEl.createEl("p", {
+				text: "No properties configured yet.",
+				cls: "ptg-empty-state",
+			});
+			return;
+		}
+
+		this.plugin.settings.propertiesToRemove.forEach((name, index) => {
+			new Setting(containerEl)
+				.setClass("ptg-property-row")
+				.addText((text) => {
+					text
+						.setPlaceholder("property name")
+						.setValue(name)
+						.onChange(async (value) => {
+							this.plugin.settings.propertiesToRemove[index] = value.trim();
+							await this.save();
+						});
+					text.inputEl.addClass("ptg-remove-input");
+					// Suggest what the vault actually uses, minus what is already listed.
+					this.suggest(text.inputEl, () =>
+						this.index.names.filter(
+							(candidate) =>
+								candidate === this.plugin.settings.propertiesToRemove[index] ||
+								!this.plugin.settings.propertiesToRemove.includes(candidate)
+						)
+					);
+				})
+				.addExtraButton((button) =>
+					button
+						.setIcon("trash-2")
+						.setTooltip("Remove")
+						.onClick(async () => {
+							this.plugin.settings.propertiesToRemove.splice(index, 1);
+							await this.save();
+							this.display();
+						})
+				);
 		});
 	}
 
@@ -360,16 +442,19 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Attachment folder")
-			.setDesc("Folder inside the repository that uploaded images are committed to.")
-			.addText((text) =>
+			.setDesc(
+				"Folder inside the repository that uploaded images are committed to. Focus the field to browse existing folders."
+			)
+			.addText((text) => {
 				text
 					.setPlaceholder("posts/attachments")
 					.setValue(this.plugin.settings.attachmentFolder)
 					.onChange(async (value) => {
 						this.plugin.settings.attachmentFolder = value.trim();
 						await this.save();
-					})
-			);
+					});
+				this.suggest(text.inputEl, () => this.repoFolders());
+			});
 
 		new Setting(containerEl)
 			.setName("Attachment URL prefix")

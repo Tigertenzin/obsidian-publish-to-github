@@ -99,6 +99,24 @@ size are always plain markdown.
 transclusions and non-media embeds like `![[Some Note#Heading]]` or `.base` files, and
 anything inside a fenced or inline code block.
 
+## Suggestions
+
+Fields that name something which already exists offer it rather than asking you to remember it.
+
+- **Property names** — in both settings lists and in the review window — are suggested from the
+  properties the vault actually uses, most widely used first. The review window leaves out
+  names the note is already writing, and the removal list leaves out ones already listed.
+- **Property values** are suggested from the values that property already takes across the
+  vault, so a `layout` field offers the layouts that exist and a `status` field the statuses in
+  use. List properties get their known values as clickable chips under the box instead, since a
+  dropdown would fight with typing several values.
+- **Repository folders** for the target and attachment folders are read from the branch itself.
+  Focus an empty field to browse every folder in the repository; type to narrow it.
+
+Everything stays a plain text field — a suggestion is a shortcut, never a restriction, so a
+folder or property that does not exist yet can still be typed in. Matches on a prefix are
+listed before matches anywhere in the name, and arrow keys plus Enter pick one.
+
 ## Republishing over an existing post
 
 When a file already exists at the target path — the usual case for a post being revised —
@@ -128,7 +146,7 @@ overwriting the newer version, and the plugin tells you to publish again.
 | Repository owner / name | The target repository. |
 | Branch | Branch the commit lands on. Must already exist. |
 | Personal access token | Fine-grained token with **read & write** access to the repository's *Contents*. |
-| Target folder | Folder inside the repository to publish into — the site's posts folder. Empty means the repository root. |
+| Target folder | Folder inside the repository to publish into — the site's posts folder. Focus the field to browse the folders that exist on the branch. Empty means the repository root. |
 | Mirror vault folder structure | Append the note's folder path inside the vault to the target folder. |
 | Commit message | Supports `{{filename}}`, `{{path}}` and `{{date}}`. |
 
@@ -156,9 +174,10 @@ states a value, so it is treated as the more specific instruction.
 
 ### Properties to remove
 
-One property name per line. Any of these present in the note are stripped from the published
-copy, and listed under *Removed by settings* in the review window with a button to restore one
-for that publish.
+One row per property. Any of these present in the note are stripped from the published copy,
+and listed under *Removed by settings* in the review window with a button to restore one for
+that publish. The name field suggests properties the vault actually uses, leaving out the ones
+already on the list.
 
 ### Content break
 
@@ -181,7 +200,7 @@ comment syntax and stays invisible in reading view.
 | Setting | Meaning |
 | --- | --- |
 | Upload embedded images | Whether to handle embeds at all. Off leaves every embed untouched. |
-| Attachment folder | Folder inside the repository that images are committed to. |
+| Attachment folder | Folder inside the repository that images are committed to. Browses existing folders the same way. |
 | Attachment URL prefix | What the rewritten embeds point at — usually the attachment folder with a leading slash, since the site serves it from the root. |
 | Image sizes | Keep an Obsidian size as an `<img width>` tag, or drop it for plain markdown. |
 
