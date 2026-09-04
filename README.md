@@ -214,7 +214,27 @@ npm run dev     # rebuild on change
 
 ## Installing into a vault
 
-Copy `main.js`, `manifest.json` and `styles.css` into
+Through [BRAT](https://github.com/TfTHacker/obsidian42-brat): add `Tigertenzin/obsidian-publish-to-github`
+as a beta plugin and it installs the latest release and keeps it updated.
+
+By hand, take `main.js`, `manifest.json` and `styles.css` from a release into
 `<vault>/.obsidian/plugins/publish-to-github/`, then enable the plugin in
 *Settings → Community plugins*. During development, symlinking the repository into that path and
-running `npm run dev` is quicker.
+running `npm run dev` is quicker — note that `main.js` is a build artifact and is not committed,
+so the repository alone is not installable.
+
+## Releasing
+
+```bash
+npm version patch      # or minor / major
+git push --follow-tags
+```
+
+`npm version` writes the new version into `package.json`, `manifest.json` and `versions.json`
+together and tags the commit. Pushing the tag runs `.github/workflows/release.yml`, which builds
+the plugin and publishes a GitHub release with `main.js`, `manifest.json` and `styles.css`
+attached — the three files BRAT and Obsidian download.
+
+Tags carry no `v` prefix, because Obsidian compares the tag against `manifest.json` exactly;
+`.npmrc` sets that, and the workflow refuses to release a tag that does not match rather than
+publishing something BRAT will silently decline to install.

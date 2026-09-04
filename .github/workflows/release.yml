@@ -1,0 +1,48 @@
+name: Release
+
+# Tagging is the release. The tag must equal the version in manifest.json,
+# which is what BRAT and Obsidian compare against; `npm version` keeps the two
+# in step, and the check below refuses the release if they ever drift.
+on:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches manifest.json
+        run: |
+          manifest_version="$(jq -r .version manifest.json)"
+          if [ "$GITHUB_REF_NAME" != "$manifest_version" ]; then
+            echo "::error::Tag '$GITHUB_REF_NAME' does not match manifest.json version '$manifest_version'."
+            echo "Obsidian and BRAT require them to be identical, with no leading 'v'."
+            echo "Use 'npm version <patch|minor|major>' to bump both together."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - run: npm ci
+
+      # Type-checks as well as bundles, so a broken release cannot be published.
+      - run: npm run build
+
+      - name: Publish the release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            main.js manifest.json styles.css \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes
