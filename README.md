@@ -145,15 +145,39 @@ overwriting the newer version, and the plugin tells you to publish again.
 | --- | --- |
 | Repository owner / name | The target repository. |
 | Branch | Branch the commit lands on. Must already exist. |
-| Personal access token | Fine-grained token with **read & write** access to the repository's *Contents*. |
+| Personal access token | A fine-grained token limited to the one repository, with **Contents: read and write**. See below. |
 | Target folder | Folder inside the repository to publish into — the site's posts folder. Focus the field to browse the folders that exist on the branch. Empty means the repository root. |
 | Mirror vault folder structure | Append the note's folder path inside the vault to the target folder. |
 | Commit message | Supports `{{filename}}`, `{{path}}` and `{{date}}`. |
 
 `Test` checks that the token can reach both the repository and the branch.
 
-The token is stored in `data.json` inside the plugin folder, in plain text — the same as every
-other Obsidian plugin credential. Keep the vault out of any repository you publish.
+### About the token
+
+Create a **fine-grained** personal access token, not a classic one. Under *Repository access*
+pick **Only select repositories** and choose the site's repository alone; under *Permissions*
+grant **Contents: Read and write** — GitHub adds *Metadata: Read* automatically, and nothing
+else is required. That is the whole surface: a token that can read and write files in one
+repository and do nothing else, to any account, ever. Set an expiry date; the plugin says
+plainly when a token has expired.
+
+A classic token with the `repo` scope also works and is the wrong choice — it grants full
+control of every repository you can reach, including private ones the plugin has no business
+touching.
+
+**Where the token lives.** Obsidian gives plugins one place to persist settings, so the token
+is stored in plain text in `data.json` inside the plugin's folder in your vault. That is the
+same as every other Obsidian plugin that talks to a service, and it has a consequence worth
+being deliberate about: anything that copies your vault copies the token. That includes backups,
+file-sync services, and Obsidian Sync when it is set to sync plugin settings. If any of those
+apply, scope the token to the one repository and give it an expiry, so a copy that escapes is
+worth as little as possible.
+
+**What the plugin does with it.** The token is sent as an `Authorization` header to
+`https://api.github.com`, which is a hardcoded constant — no setting can redirect it elsewhere.
+It is never written into a note, a commit, or the published output, never logged, and stripped
+out of any error message before that message is shown. The plugin makes no other network
+requests of any kind.
 
 ### Properties to add
 

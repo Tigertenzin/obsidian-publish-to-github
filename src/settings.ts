@@ -175,7 +175,7 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Personal access token")
 			.setDesc(
-				"Fine-grained token with read & write access to the repository's contents. Stored in plain text inside this vault's plugin data — treat the vault accordingly."
+				"A fine-grained token limited to this one repository, with Contents: read and write — nothing else is needed. It is stored in plain text in this plugin's data.json, so anything that copies your vault (a backup, a sync service, a git repository) carries the token with it."
 			)
 			.addText((text) => {
 				text.inputEl.type = "password";

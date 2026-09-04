@@ -30,6 +30,12 @@ export class GithubClient {
 		return this.getSettings();
 	}
 
+	/** The `/repos/owner/name` prefix, with both parts escaped. */
+	private get repoRoot(): string {
+		const { owner, repo } = this.settings;
+		return `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+	}
+
 	/** Throws a readable error when the connection settings are incomplete. */
 	assertConfigured(): void {
 		const missing: string[] = [];
@@ -47,7 +53,7 @@ export class GithubClient {
 		this.assertConfigured();
 		const { owner, repo, branch } = this.settings;
 
-		const repoResponse = await this.request("GET", `/repos/${owner}/${repo}`);
+		const repoResponse = await this.request("GET", this.repoRoot);
 		if (repoResponse.status === 404) {
 			throw new Error(`Repository ${owner}/${repo} not found, or the token cannot see it.`);
 		}
@@ -55,7 +61,7 @@ export class GithubClient {
 
 		const branchResponse = await this.request(
 			"GET",
-			`/repos/${owner}/${repo}/branches/${encodePath(branch)}`
+			`${this.repoRoot}/branches/${encodePath(branch)}`
 		);
 		if (branchResponse.status === 404) {
 			throw new Error(`Branch "${branch}" does not exist in ${owner}/${repo}.`);
@@ -76,7 +82,7 @@ export class GithubClient {
 
 		const response = await this.request(
 			"GET",
-			`/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`
+			`${this.repoRoot}/git/trees/${encodeURIComponent(branch)}?recursive=1`
 		);
 
 		if (response.status === 404) {
@@ -100,7 +106,7 @@ export class GithubClient {
 
 		const response = await this.request(
 			"GET",
-			`/repos/${owner}/${repo}/contents/${encodePath(path)}?ref=${encodeURIComponent(branch)}`
+			`${this.repoRoot}/contents/${encodePath(path)}?ref=${encodeURIComponent(branch)}`
 		);
 
 		if (response.status === 404) return null;
@@ -153,7 +159,7 @@ export class GithubClient {
 		const { owner, repo, branch } = this.settings;
 
 		const sha = expectedSha === undefined ? (await this.getFile(path))?.sha ?? null : expectedSha;
-		const response = await this.request("PUT", `/repos/${owner}/${repo}/contents/${encodePath(path)}`, {
+		const response = await this.request("PUT", `${this.repoRoot}/contents/${encodePath(path)}`, {
 			message,
 			content: base64,
 			branch,
@@ -184,10 +190,20 @@ export class GithubClient {
 		});
 	}
 
+	/**
+	 * Strips the token out of text on its way to an error or a notice. GitHub does
+	 * not echo the Authorization header, but an intermediary might, and an error
+	 * message is the one place plugin text becomes visible and copy-pasteable.
+	 */
+	private redact(text: string): string {
+		const { token } = this.settings;
+		return token.length > 0 ? text.split(token).join("[token]") : text;
+	}
+
 	private assertOk(response: RequestUrlResponse, action: string): void {
 		if (response.status >= 200 && response.status < 300) return;
 
-		const detail = response.json?.message ?? response.text?.slice(0, 200) ?? "";
+		const detail = this.redact(String(response.json?.message ?? response.text?.slice(0, 200) ?? ""));
 		if (response.status === 401) {
 			throw new Error("GitHub rejected the token (401). Check that it is valid and not expired.");
 		}
