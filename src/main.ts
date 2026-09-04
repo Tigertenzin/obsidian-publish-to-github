@@ -13,7 +13,6 @@ import {
 	parseNote,
 	resolveProperties,
 	type ParsedNote,
-	type ResolvedProperty,
 } from "./transform";
 
 export default class PublishToGithubPlugin extends Plugin {
@@ -73,14 +72,14 @@ export default class PublishToGithubPlugin extends Plugin {
 		}
 
 		const note = parseNote(content);
-		const { added, removed } = resolveProperties(note.frontmatter, this.settings);
+		const { properties, removed } = resolveProperties(note.frontmatter, this.settings);
 		const targetPath = buildTargetPath(file.path, this.settings);
 
 		const context: ReviewContext = {
 			sourcePath: file.path,
 			targetPath,
 			repoLabel: `${this.settings.owner}/${this.settings.repo}`,
-			properties: added,
+			properties,
 			removed,
 			contentTrimmed: applyBreak(note.body, this.settings).trimmed,
 			frontmatterError: note.frontmatterError,
@@ -90,18 +89,15 @@ export default class PublishToGithubPlugin extends Plugin {
 	}
 
 	private openReview(file: TFile, note: ParsedNote, context: ReviewContext) {
-		new ReviewModal(this.app, context, (properties) => {
-			this.openPreview(file, note, context, properties);
+		// The modal edits context.properties in place, so stepping back from the
+		// preview reopens the review window with the user's edits still there.
+		new ReviewModal(this.app, context, () => {
+			this.openPreview(file, note, context);
 		}).open();
 	}
 
-	private openPreview(
-		file: TFile,
-		note: ParsedNote,
-		context: ReviewContext,
-		properties: ResolvedProperty[]
-	) {
-		const output = buildOutput(note, properties, this.settings);
+	private openPreview(file: TFile, note: ParsedNote, context: ReviewContext) {
+		const output = buildOutput(note, context.properties, this.settings);
 
 		new PreviewModal(this.app, {
 			targetPath: context.targetPath,

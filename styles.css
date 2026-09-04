@@ -68,6 +68,90 @@
 	width: 9rem;
 }
 
+/* Review window property rows */
+
+.ptg-property-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5em;
+	margin: 0.6em 0;
+}
+
+.ptg-property {
+	padding: 0.6em 0.7em;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background-color: var(--background-primary-alt);
+}
+
+.ptg-property-head {
+	display: flex;
+	align-items: center;
+	gap: 0.5em;
+	margin-bottom: 0.45em;
+}
+
+.ptg-key-input {
+	flex: 1 1 auto;
+	min-width: 6rem;
+	font-weight: var(--font-medium);
+}
+
+.ptg-property-head select {
+	flex: 0 0 auto;
+}
+
+.ptg-origin {
+	flex: 0 0 auto;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	white-space: nowrap;
+}
+
+.ptg-property-value input.ptg-value-input,
+.ptg-property-value textarea.ptg-value-input {
+	width: 100%;
+	resize: vertical;
+	font-family: var(--font-text);
+}
+
+.ptg-object-value {
+	margin: 0;
+	padding: 0.5em 0.6em;
+	overflow-x: auto;
+	border-radius: var(--radius-s);
+	background-color: var(--background-secondary);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.ptg-add-row.setting-item {
+	padding-top: 0;
+	border-top: none;
+}
+
+.ptg-removed-row {
+	display: flex;
+	align-items: center;
+	gap: 0.6em;
+	padding: 0.35em 0.2em;
+	border-bottom: 1px solid var(--background-modifier-border);
+	font-size: var(--font-ui-small);
+}
+
+.ptg-removed-key {
+	flex: 0 0 auto;
+	font-weight: var(--font-medium);
+}
+
+.ptg-removed-value {
+	flex: 1 1 auto;
+	overflow: hidden;
+	color: var(--text-faint);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .ptg-list-row .setting-item-control textarea,
 .ptg-textarea-row .setting-item-control textarea {
 	width: 100%;

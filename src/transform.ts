@@ -3,13 +3,24 @@ import type { AddedProperty, PropertyType, PublishToGithubSettings } from "./set
 
 export type PropertyValue = string | number | boolean | string[] | null;
 
-/** A property shown in the review window, with the value that will be published. */
-export interface ResolvedProperty {
+/**
+ * Types a property can take in the review window. "object" covers nested YAML the
+ * inputs cannot represent; those values are passed through untouched.
+ */
+export type EditableType = PropertyType | "object";
+
+/** Where a property in the review window came from. */
+export type PropertyOrigin = "note" | "settings" | "manual";
+
+/** One property of the published copy, as shown and edited in the review window. */
+export interface OutgoingProperty {
 	key: string;
-	type: PropertyType;
+	type: EditableType;
+	/** The edited value, for every type except "object". */
 	value: PropertyValue;
-	/** True when the source note already carried this property. */
-	fromNote: boolean;
+	/** The original value, used instead of `value` when the type is "object". */
+	rawValue?: unknown;
+	origin: PropertyOrigin;
 }
 
 export interface ParsedNote {
@@ -47,39 +58,90 @@ export function parseNote(content: string): ParsedNote {
 }
 
 /**
- * Applies the configured property rules to a note's frontmatter, producing the list
- * of added properties for the review window and the set of keys that get stripped.
+ * Builds the full list of properties the published copy will carry: the note's own
+ * properties, with the configured additions applied on top. Properties the settings
+ * strip are returned separately so the review window can offer them back.
+ *
+ * A key that appears in both settings lists is added rather than removed — the add
+ * list states a value, so it is the more specific instruction.
  */
 export function resolveProperties(
 	frontmatter: Record<string, unknown>,
 	settings: PublishToGithubSettings
-): { added: ResolvedProperty[]; removed: string[] } {
-	const removed = settings.propertiesToRemove.filter((key) => key in frontmatter);
+): { properties: OutgoingProperty[]; removed: OutgoingProperty[] } {
+	const toRemove = new Set(settings.propertiesToRemove);
+	const configured = new Map(
+		settings.propertiesToAdd.filter((property) => property.key.length > 0).map((property) => [property.key, property])
+	);
 
-	const added = settings.propertiesToAdd
-		.filter((property) => property.key.length > 0)
-		.map((property) => resolveProperty(property, frontmatter));
+	const properties: OutgoingProperty[] = [];
+	const removed: OutgoingProperty[] = [];
 
-	return { added, removed };
+	// The note's own properties keep their original order.
+	for (const [key, value] of Object.entries(frontmatter)) {
+		const config = configured.get(key);
+		if (config) {
+			properties.push(resolveConfigured(config, frontmatter));
+		} else if (toRemove.has(key)) {
+			removed.push(noteProperty(key, value));
+		} else {
+			properties.push(noteProperty(key, value));
+		}
+	}
+
+	// Configured properties the note does not have are appended in settings order.
+	for (const [key, config] of configured) {
+		if (key in frontmatter) continue;
+		properties.push(resolveConfigured(config, frontmatter));
+	}
+
+	return { properties, removed };
 }
 
-function resolveProperty(property: AddedProperty, frontmatter: Record<string, unknown>): ResolvedProperty {
+function resolveConfigured(property: AddedProperty, frontmatter: Record<string, unknown>): OutgoingProperty {
 	const hasExisting = property.key in frontmatter;
-	if (hasExisting && property.keepExistingValue) {
-		return {
-			key: property.key,
-			type: property.type,
-			value: coerceExisting(frontmatter[property.key], property.type),
-			fromNote: true,
-		};
-	}
+	const value =
+		hasExisting && property.keepExistingValue
+			? coerceExisting(frontmatter[property.key], property.type)
+			: parseValue(property.defaultValue, property.type);
 
 	return {
 		key: property.key,
 		type: property.type,
-		value: parseValue(property.defaultValue, property.type),
-		fromNote: hasExisting,
+		value,
+		origin: hasExisting ? "note" : "settings",
 	};
+}
+
+/** Wraps a value read straight from the note, guessing the type its editor should use. */
+export function noteProperty(key: string, value: unknown): OutgoingProperty {
+	const type = inferType(value);
+	if (type === "object") {
+		return { key, type, value: null, rawValue: value, origin: "note" };
+	}
+	return { key, type, value: coerceExisting(value, type), origin: "note" };
+}
+
+/** Picks the editor type that best fits a value already in the note. */
+export function inferType(value: unknown): EditableType {
+	if (typeof value === "boolean") return "checkbox";
+	if (typeof value === "number") return "number";
+	if (Array.isArray(value)) {
+		return value.every((item) => item === null || typeof item !== "object") ? "list" : "object";
+	}
+	if (value === null || value === undefined) return "text";
+	if (typeof value === "object") return "object";
+
+	const text = String(value);
+	if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return "date";
+	if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(text)) return "datetime";
+	return "text";
+}
+
+/** Re-reads a property's value through a different type, when the user switches it. */
+export function convertValue(property: OutgoingProperty, nextType: EditableType): PropertyValue {
+	if (property.type === "object" || nextType === "object") return property.value;
+	return parseValue(valueToInput(property.value, property.type), nextType);
 }
 
 /** Reshapes a value already present in the note so it matches the configured type. */
@@ -159,28 +221,30 @@ export function applyBreak(body: string, settings: PublishToGithubSettings): { b
 }
 
 /**
- * Builds the markdown that gets published: source frontmatter minus the removed
- * properties, plus the reviewed values, followed by the body up to the break.
+ * Builds the markdown that gets published. The property list is the complete set of
+ * frontmatter for the published copy — anything the user removed in the review window
+ * is simply absent from it — followed by the body up to the break marker.
  */
 export function buildOutput(
 	note: ParsedNote,
-	properties: ResolvedProperty[],
+	properties: OutgoingProperty[],
 	settings: PublishToGithubSettings
 ): string {
-	const frontmatter: Record<string, unknown> = { ...note.frontmatter };
-
-	for (const key of settings.propertiesToRemove) {
-		delete frontmatter[key];
-	}
+	const frontmatter: Record<string, unknown> = {};
 
 	for (const property of properties) {
-		if (property.key.length === 0) continue;
-		// An empty value means "leave the property out" rather than writing null.
-		if (property.value === null || (Array.isArray(property.value) && property.value.length === 0)) {
-			delete frontmatter[property.key];
+		const key = property.key.trim();
+		if (key.length === 0) continue;
+
+		if (property.type === "object") {
+			frontmatter[key] = property.rawValue;
 			continue;
 		}
-		frontmatter[property.key] = property.value;
+		// An empty value means "leave the property out" rather than writing null.
+		if (property.value === null || (Array.isArray(property.value) && property.value.length === 0)) {
+			continue;
+		}
+		frontmatter[key] = property.value;
 	}
 
 	const { body } = applyBreak(note.body, settings);

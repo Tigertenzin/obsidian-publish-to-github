@@ -8,11 +8,20 @@ is never modified — every change applies only to the copy that lands in the re
 
 `Publish to GitHub` (command palette) runs a two-step confirmation:
 
-1. **Review window** — lists the properties that will be written, with an input for each one
-   matching its configured type, plus the properties that will be stripped and a note when
-   content after the break marker will be dropped.
+1. **Review window** — the complete frontmatter of the published copy, laid out for editing.
+   The settings decide what it starts as; from there you can change any value, rename or
+   retype any property, drop one with its trash button, add a new one that lives nowhere in
+   the settings, and restore anything the settings stripped. It also flags when content after
+   the break marker will be dropped.
 2. **Preview window** — shows the exact markdown that will be committed, and where. `Back`
    returns to the review window with your edits intact; `Publish` commits.
+
+Edits in the review window apply to that one publish. Nothing there is written back to the
+note or to the settings.
+
+Each property row shows where it came from — *from note*, *from settings*, or *added here* —
+along with its type. Values the inputs cannot represent (nested YAML, lists of objects) are
+shown read-only as *nested value* and passed through to the published copy untouched.
 
 ## Settings
 
@@ -42,11 +51,18 @@ Each row is `name · type · default value · keep existing value`.
 - **keep existing value** on: when the note already carries the property, its own value is used
   instead of the default. Off: the default always wins, which is how you overwrite a property.
 
-Leaving a field empty in the review window omits that property from the published copy.
+These are defaults for the review window, not fixed rules — every one of them can be changed
+or overridden there before publishing. Leaving a value empty in the review window omits that
+property from the published copy.
+
+A key listed in both *properties to add* and *properties to remove* is added: the add list
+states a value, so it is treated as the more specific instruction.
 
 ### Properties to remove
 
-One property name per line. Any of these present in the note are stripped from the published copy.
+One property name per line. Any of these present in the note are stripped from the published
+copy, and listed under *Removed by settings* in the review window with a button to restore one
+for that publish.
 
 ### Content break
 
