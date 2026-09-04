@@ -254,9 +254,37 @@ export function buildOutput(
 		return trimmedBody.length > 0 ? `${trimmedBody}\n` : "";
 	}
 
-	const yaml = stringifyYaml(frontmatter).replace(/\s+$/, "");
+	const dateKeys = new Set(
+		properties.filter((p) => p.type === "date" || p.type === "datetime").map((p) => p.key.trim())
+	);
+	const yaml = unquoteDates(stringifyYaml(frontmatter), dateKeys).replace(/\s+$/, "");
 	const header = `---\n${yaml}\n---\n`;
 	return trimmedBody.length > 0 ? `${header}\n${trimmedBody}\n` : header;
+}
+
+const DATE_LIKE = /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?)?$/;
+
+/**
+ * Date properties are carried as strings, and the YAML dumper quotes any string
+ * that looks like a date to keep it a string. Frontmatter dates are conventionally
+ * written plain, so the quotes are stripped back off the keys the user typed as
+ * dates — otherwise every publish shows a spurious change against the live file.
+ */
+function unquoteDates(yaml: string, dateKeys: Set<string>): string {
+	if (dateKeys.size === 0) return yaml;
+
+	return yaml
+		.split("\n")
+		.map((line) => {
+			// Top-level keys only: frontmatter properties are never indented.
+			const match = line.match(/^([^\s#][^:]*): (['"])(.+)\2$/);
+			if (!match) return line;
+
+			const [, key, , value] = match;
+			if (!dateKeys.has(key) || !DATE_LIKE.test(value)) return line;
+			return `${key}: ${value}`;
+		})
+		.join("\n");
 }
 
 /** Resolves the path the note is written to inside the repository. */
