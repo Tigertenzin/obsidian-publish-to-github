@@ -159,3 +159,91 @@
 	resize: vertical;
 	font-family: var(--font-text);
 }
+
+/* Destination check */
+
+.ptg-destination {
+	margin: 0.8em 0 0.2em;
+	padding: 0.5em 0.7em;
+	border-radius: var(--radius-s);
+	background-color: var(--background-secondary);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.ptg-destination.ptg-checking {
+	color: var(--text-faint);
+	font-style: italic;
+}
+
+.ptg-destination.ptg-destination-exists {
+	background-color: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+/* Diff view */
+
+.ptg-view-switch {
+	display: flex;
+	gap: 0.3em;
+	margin: 0.8em 0 0.5em;
+}
+
+.ptg-view-switch button {
+	padding: 0.25em 0.8em;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background-color: var(--background-primary);
+	box-shadow: none;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	cursor: pointer;
+}
+
+.ptg-view-switch button.is-active {
+	background-color: var(--background-modifier-hover);
+	color: var(--text-normal);
+	font-weight: var(--font-medium);
+}
+
+.ptg-diff {
+	padding: 0;
+}
+
+.ptg-diff-line {
+	padding: 0 0.75em;
+	white-space: pre-wrap;
+	word-break: break-word;
+	tab-size: 4;
+}
+
+.ptg-diff-add {
+	background-color: rgba(var(--color-green-rgb), 0.15);
+	color: var(--text-normal);
+}
+
+.ptg-diff-remove {
+	background-color: rgba(var(--color-red-rgb), 0.15);
+	color: var(--text-muted);
+}
+
+.ptg-diff-context {
+	color: var(--text-faint);
+}
+
+.ptg-diff-gap {
+	margin: 0.2em 0;
+	background-color: var(--background-secondary-alt);
+	color: var(--text-faint);
+	font-style: italic;
+}
+
+.ptg-stat-add {
+	color: var(--color-green);
+	font-weight: var(--font-medium);
+}
+
+.ptg-stat-remove {
+	color: var(--color-red);
+	font-weight: var(--font-medium);
+}

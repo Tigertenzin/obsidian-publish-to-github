@@ -1,5 +1,6 @@
 import {
 	App,
+	ButtonComponent,
 	DropdownComponent,
 	ExtraButtonComponent,
 	Modal,
@@ -10,6 +11,8 @@ import {
 	ToggleComponent,
 	stringifyYaml,
 } from "obsidian";
+import { diffLines, type DiffLine, type DiffResult } from "./diff";
+import type { RemoteFile } from "./github";
 import { PROPERTY_TYPE_LABELS, type PropertyType } from "./settings";
 import {
 	convertValue,
@@ -38,6 +41,8 @@ export interface ReviewContext {
 	removed: OutgoingProperty[];
 	contentTrimmed: boolean;
 	frontmatterError: string | null;
+	/** The file already at the target path, looked up once per publish run. */
+	remote: Promise<RemoteFile | null>;
 }
 
 /**
@@ -99,6 +104,8 @@ export class ReviewModal extends Modal {
 
 		this.removedEl = contentEl.createDiv();
 
+		this.renderDestinationStatus(contentEl.createDiv({ cls: "ptg-destination" }));
+
 		if (this.context.contentTrimmed) {
 			contentEl.createDiv({
 				cls: "ptg-note",
@@ -124,6 +131,32 @@ export class ReviewModal extends Modal {
 			);
 
 		this.refresh();
+	}
+
+	/** Reports whether the target path is already taken, once GitHub answers. */
+	private renderDestinationStatus(container: HTMLElement): void {
+		container.setText("Checking the repository…");
+		container.addClass("ptg-checking");
+
+		this.context.remote
+			.then((remote) => {
+				if (!container.isConnected) return;
+				container.removeClass("ptg-checking");
+				if (remote) {
+					container.addClass("ptg-destination-exists");
+					container.setText(
+						"A file already exists at this path. You will see a diff and a separate confirmation before it is overwritten."
+					);
+				} else {
+					container.setText("Nothing at this path yet — this will create a new file.");
+				}
+			})
+			.catch((error: Error) => {
+				if (!container.isConnected) return;
+				container.removeClass("ptg-checking");
+				container.addClass("ptg-warning");
+				container.setText(`Could not check the destination: ${error.message}`);
+			});
 	}
 
 	private refresh(): void {
@@ -304,17 +337,215 @@ export class ReviewModal extends Modal {
 	}
 }
 
-/** Second step: show the exact markdown that will be committed. */
+export interface PreviewOptions {
+	targetPath: string;
+	repoLabel: string;
+	branch: string;
+	output: string;
+	/** The file currently at the target path, or null when the path is free. */
+	remote: RemoteFile | null;
+	/** Set when the destination lookup failed, so the diff could not be built. */
+	remoteError: string | null;
+	onBack: () => void;
+	onPublish: () => Promise<void>;
+}
+
+/**
+ * Second step: the exact markdown that will be committed. When something is already
+ * at the target path it opens on a diff against that file, and publishing goes
+ * through a separate overwrite confirmation.
+ */
 export class PreviewModal extends Modal {
+	private readonly diff: DiffResult | null;
+	private view: "diff" | "document";
+	private bodyEl!: HTMLElement;
+
+	constructor(app: App, private readonly options: PreviewOptions) {
+		super(app);
+
+		const remote = options.remote;
+		this.diff = remote && !remote.tooLarge ? diffLines(remote.content, options.output) : null;
+		// Default to whichever view answers the question the user actually has.
+		this.view = hasLineChanges(this.diff) ? "diff" : "document";
+	}
+
+	onOpen(): void {
+		const { contentEl } = this;
+		contentEl.empty();
+		contentEl.addClass("ptg-modal");
+
+		const overwriting = this.options.remote !== null;
+		contentEl.createEl("h2", { text: overwriting ? "Review changes" : "Preview" });
+		contentEl.createDiv({
+			cls: "ptg-summary-row",
+			text: `${this.options.repoLabel} · ${this.options.branch} · ${this.options.targetPath}`,
+		});
+
+		this.renderStatus(contentEl);
+		this.renderViewSwitch(contentEl);
+		this.bodyEl = contentEl.createDiv();
+		this.renderBody();
+		this.renderButtons(contentEl, overwriting);
+	}
+
+	private renderStatus(contentEl: HTMLElement): void {
+		if (this.options.remoteError) {
+			contentEl.createDiv({
+				cls: "ptg-warning",
+				text: `The destination could not be checked (${this.options.remoteError}). Publishing may overwrite an existing file without showing you a diff.`,
+			});
+			return;
+		}
+
+		if (!this.options.remote) {
+			contentEl.createDiv({ cls: "ptg-note", text: "This will create a new file." });
+			return;
+		}
+
+		if (this.options.remote.tooLarge) {
+			contentEl.createDiv({
+				cls: "ptg-warning",
+				text: "A file already exists here but is too large for GitHub to return inline, so it cannot be diffed. Publishing will replace it.",
+			});
+			return;
+		}
+
+		if (this.diff?.identical) {
+			contentEl.createDiv({
+				cls: "ptg-note",
+				text: "The published copy is identical to the file already in the repository — there is nothing to change.",
+			});
+			return;
+		}
+
+		if (this.diff?.whitespaceOnly) {
+			contentEl.createDiv({
+				cls: "ptg-note",
+				text: "No line differs from the file in the repository — only its line endings or trailing newline. Publishing will still rewrite the file.",
+			});
+			return;
+		}
+
+		const stats = contentEl.createDiv({ cls: "ptg-warning" });
+		stats.setText("This will overwrite the file already at this path. ");
+		stats.createSpan({ cls: "ptg-stat-add", text: `+${this.diff?.added ?? 0}` });
+		stats.createSpan({ text: " " });
+		stats.createSpan({ cls: "ptg-stat-remove", text: `−${this.diff?.removed ?? 0}` });
+
+		if (this.diff?.coarse) {
+			contentEl.createDiv({
+				cls: "ptg-hint",
+				text: "The documents differ too much to match up line by line, so the whole file is shown as replaced.",
+			});
+		}
+	}
+
+	private renderViewSwitch(contentEl: HTMLElement): void {
+		if (!hasLineChanges(this.diff)) return;
+
+		const switcher = contentEl.createDiv({ cls: "ptg-view-switch" });
+		const options: Array<{ id: "diff" | "document"; label: string }> = [
+			{ id: "diff", label: "Changes" },
+			{ id: "document", label: "Full document" },
+		];
+
+		for (const option of options) {
+			const button = switcher.createEl("button", { text: option.label });
+			button.toggleClass("is-active", this.view === option.id);
+			button.onclick = () => {
+				this.view = option.id;
+				switcher.findAll("button").forEach((el) => el.removeClass("is-active"));
+				button.addClass("is-active");
+				this.renderBody();
+			};
+		}
+	}
+
+	private renderBody(): void {
+		this.bodyEl.empty();
+
+		if (this.view === "diff" && hasLineChanges(this.diff)) {
+			this.renderDiff(this.bodyEl);
+			return;
+		}
+
+		const pre = this.bodyEl.createEl("pre", { cls: "ptg-preview" });
+		pre.createEl("code", { text: this.options.output });
+
+		if (this.options.output.trim().length === 0) {
+			this.bodyEl.createDiv({
+				cls: "ptg-warning",
+				text: "The published copy would be empty. Check the break marker and property settings.",
+			});
+		}
+	}
+
+	private renderDiff(container: HTMLElement): void {
+		const pre = container.createEl("pre", { cls: "ptg-preview ptg-diff" });
+
+		for (const line of this.diff?.lines ?? []) {
+			pre.createDiv({ cls: `ptg-diff-line ptg-diff-${line.type}`, text: diffLineText(line) });
+		}
+	}
+
+	private renderButtons(contentEl: HTMLElement, overwriting: boolean): void {
+		new Setting(contentEl)
+			.addButton((button) =>
+				button.setButtonText("Back").onClick(() => {
+					this.close();
+					this.options.onBack();
+				})
+			)
+			.addButton((button) => button.setButtonText("Cancel").onClick(() => this.close()))
+			.addButton((button) => {
+				button.setButtonText(overwriting ? "Overwrite…" : "Publish").setCta();
+				if (overwriting) button.setWarning();
+				button.onClick(() => {
+					if (!overwriting) {
+						void this.runPublish(button);
+						return;
+					}
+					new ConfirmOverwriteModal(this.app, {
+						targetPath: this.options.targetPath,
+						repoLabel: this.options.repoLabel,
+						branch: this.options.branch,
+						diff: this.diff,
+						onConfirm: async () => {
+							await this.options.onPublish();
+							this.close();
+						},
+					}).open();
+				});
+			});
+	}
+
+	private async runPublish(button: ButtonComponent): Promise<void> {
+		button.setDisabled(true);
+		button.setButtonText("Publishing…");
+		try {
+			await this.options.onPublish();
+			this.close();
+		} finally {
+			button.setDisabled(false);
+			button.setButtonText("Publish");
+		}
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
+	}
+}
+
+/** Third step, only when a file is being replaced: confirm the overwrite. */
+export class ConfirmOverwriteModal extends Modal {
 	constructor(
 		app: App,
 		private readonly options: {
 			targetPath: string;
 			repoLabel: string;
 			branch: string;
-			output: string;
-			onBack: () => void;
-			onPublish: () => Promise<void>;
+			diff: DiffResult | null;
+			onConfirm: () => Promise<void>;
 		}
 	) {
 		super(app);
@@ -325,43 +556,41 @@ export class PreviewModal extends Modal {
 		contentEl.empty();
 		contentEl.addClass("ptg-modal");
 
-		contentEl.createEl("h2", { text: "Preview" });
-		contentEl.createDiv({
-			cls: "ptg-summary-row",
-			text: `${this.options.repoLabel} · ${this.options.branch} · ${this.options.targetPath}`,
+		contentEl.createEl("h2", { text: "Overwrite this file?" });
+
+		contentEl.createEl("p", {
+			text: `${this.options.targetPath} in ${this.options.repoLabel} on branch ${this.options.branch} will be replaced by the version you just reviewed.`,
 		});
 
-		const pre = contentEl.createEl("pre", { cls: "ptg-preview" });
-		pre.createEl("code", { text: this.options.output });
-
-		if (this.options.output.trim().length === 0) {
-			contentEl.createDiv({
-				cls: "ptg-warning",
-				text: "The published copy would be empty. Check the break marker and property settings.",
-			});
+		const diff = this.options.diff;
+		if (hasLineChanges(diff)) {
+			const stats = contentEl.createEl("p", { cls: "ptg-summary-row" });
+			stats.createSpan({ cls: "ptg-stat-add", text: `+${diff.added}` });
+			stats.createSpan({ text: " " });
+			stats.createSpan({ cls: "ptg-stat-remove", text: `−${diff.removed}` });
+			stats.createSpan({ text: " lines" });
 		}
 
+		contentEl.createEl("p", {
+			cls: "ptg-hint",
+			text: "The commit will be rejected if the file has changed on GitHub since it was read.",
+		});
+
 		new Setting(contentEl)
-			.addButton((button) =>
-				button.setButtonText("Back").onClick(() => {
-					this.close();
-					this.options.onBack();
-				})
-			)
 			.addButton((button) => button.setButtonText("Cancel").onClick(() => this.close()))
 			.addButton((button) =>
 				button
-					.setButtonText("Publish")
-					.setCta()
+					.setButtonText("Overwrite")
+					.setWarning()
 					.onClick(async () => {
 						button.setDisabled(true);
 						button.setButtonText("Publishing…");
 						try {
-							await this.options.onPublish();
+							await this.options.onConfirm();
 							this.close();
 						} finally {
 							button.setDisabled(false);
-							button.setButtonText("Publish");
+							button.setButtonText("Overwrite");
 						}
 					})
 			);
@@ -369,6 +598,24 @@ export class PreviewModal extends Modal {
 
 	onClose(): void {
 		this.contentEl.empty();
+	}
+}
+
+/** True when the diff has something worth rendering as added and removed lines. */
+function hasLineChanges(diff: DiffResult | null): diff is DiffResult {
+	return diff !== null && !diff.identical && !diff.whitespaceOnly;
+}
+
+function diffLineText(line: DiffLine): string {
+	switch (line.type) {
+		case "add":
+			return `+ ${line.text}`;
+		case "remove":
+			return `- ${line.text}`;
+		case "gap":
+			return `⋯ ${line.text}`;
+		default:
+			return `  ${line.text}`;
 	}
 }
 

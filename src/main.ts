@@ -1,5 +1,5 @@
 import { MarkdownView, Notice, Plugin, TFile, moment } from "obsidian";
-import { GithubClient } from "./github";
+import { GithubClient, type RemoteFile } from "./github";
 import { PreviewModal, ReviewModal, type ReviewContext } from "./modals";
 import {
 	DEFAULT_SETTINGS,
@@ -83,7 +83,13 @@ export default class PublishToGithubPlugin extends Plugin {
 			removed,
 			contentTrimmed: applyBreak(note.body, this.settings).trimmed,
 			frontmatterError: note.frontmatterError,
+			// Started here and reused by both windows, so stepping back and forth
+			// does not re-query GitHub.
+			remote: this.client.getFile(targetPath),
 		};
+
+		// The review window reports the failure; nothing is unhandled if it rejects.
+		context.remote.catch(() => undefined);
 
 		this.openReview(file, note, context);
 	}
@@ -92,28 +98,41 @@ export default class PublishToGithubPlugin extends Plugin {
 		// The modal edits context.properties in place, so stepping back from the
 		// preview reopens the review window with the user's edits still there.
 		new ReviewModal(this.app, context, () => {
-			this.openPreview(file, note, context);
+			void this.openPreview(file, note, context);
 		}).open();
 	}
 
-	private openPreview(file: TFile, note: ParsedNote, context: ReviewContext) {
+	private async openPreview(file: TFile, note: ParsedNote, context: ReviewContext) {
 		const output = buildOutput(note, context.properties, this.settings);
+
+		let remote: RemoteFile | null = null;
+		let remoteError: string | null = null;
+		try {
+			remote = await context.remote;
+		} catch (error) {
+			remoteError = (error as Error).message;
+		}
 
 		new PreviewModal(this.app, {
 			targetPath: context.targetPath,
 			repoLabel: context.repoLabel,
 			branch: this.settings.branch,
 			output,
+			remote,
+			remoteError,
 			onBack: () => this.openReview(file, note, context),
-			onPublish: () => this.commit(file, context.targetPath, output),
+			// The SHA the diff was built against, so a file that moved on underneath
+			// us is rejected rather than clobbered. Undefined means "look it up".
+			onPublish: () =>
+				this.commit(file, context.targetPath, output, remoteError ? undefined : remote?.sha ?? null),
 		}).open();
 	}
 
-	private async commit(file: TFile, targetPath: string, output: string) {
+	private async commit(file: TFile, targetPath: string, output: string, expectedSha?: string | null) {
 		const message = this.commitMessage(file, targetPath);
 
 		try {
-			const result = await this.client.publish(targetPath, output, message);
+			const result = await this.client.publish(targetPath, output, message, expectedSha);
 			new Notice(
 				`${result.created ? "Created" : "Updated"} ${targetPath} on ${this.settings.branch}.`,
 				6000

@@ -8,6 +8,14 @@ export interface ConnectionInfo {
 	branch: string;
 }
 
+/** A file as it currently stands in the repository. */
+export interface RemoteFile {
+	sha: string;
+	content: string;
+	/** True when GitHub declined to inline the content because the file is too big. */
+	tooLarge: boolean;
+}
+
 export interface PublishResult {
 	/** True when the file did not exist on the branch before this commit. */
 	created: boolean;
@@ -57,9 +65,11 @@ export class GithubClient {
 		return { fullName: repoResponse.json?.full_name ?? `${owner}/${repo}`, branch };
 	}
 
-	/** Returns the blob SHA of a file on the branch, or null when it does not exist. */
-	async getFileSha(path: string): Promise<string | null> {
+	/** Reads the file at a path on the branch, or null when nothing is there yet. */
+	async getFile(path: string): Promise<RemoteFile | null> {
+		this.assertConfigured();
 		const { owner, repo, branch } = this.settings;
+
 		const response = await this.request(
 			"GET",
 			`/repos/${owner}/${repo}/contents/${encodePath(path)}?ref=${encodeURIComponent(branch)}`
@@ -68,18 +78,34 @@ export class GithubClient {
 		if (response.status === 404) return null;
 		this.assertOk(response, "look up the existing file");
 
-		const sha = response.json?.sha;
-		if (typeof sha !== "string") {
+		const json = response.json;
+		if (typeof json?.sha !== "string") {
 			throw new Error(`${path} exists in the repository but is not a file.`);
 		}
-		return sha;
+
+		// Above roughly 1 MB the contents API returns metadata with no inline body.
+		if (json.encoding !== "base64" || typeof json.content !== "string") {
+			return { sha: json.sha, content: "", tooLarge: true };
+		}
+
+		return { sha: json.sha, content: fromBase64(json.content), tooLarge: false };
 	}
 
-	async publish(path: string, content: string, message: string): Promise<PublishResult> {
+	/**
+	 * Commits the file. Pass `expectedSha` — the SHA the user was shown a diff
+	 * against, or null for "nothing was there" — so GitHub rejects the write if the
+	 * file changed in the meantime instead of silently overwriting newer work.
+	 */
+	async publish(
+		path: string,
+		content: string,
+		message: string,
+		expectedSha?: string | null
+	): Promise<PublishResult> {
 		this.assertConfigured();
 		const { owner, repo, branch } = this.settings;
 
-		const sha = await this.getFileSha(path);
+		const sha = expectedSha === undefined ? (await this.getFile(path))?.sha ?? null : expectedSha;
 		const response = await this.request("PUT", `/repos/${owner}/${repo}/contents/${encodePath(path)}`, {
 			message,
 			content: toBase64(content),
@@ -137,6 +163,16 @@ function encodePath(path: string): string {
 		.split("/")
 		.map((segment) => encodeURIComponent(segment))
 		.join("/");
+}
+
+/** Decodes the base64 body GitHub returns for a file. */
+export function fromBase64(encoded: string): string {
+	const binary = atob(encoded.replace(/\s/g, ""));
+	const bytes = new Uint8Array(binary.length);
+	for (let i = 0; i < binary.length; i++) {
+		bytes[i] = binary.charCodeAt(i);
+	}
+	return new TextDecoder().decode(bytes);
 }
 
 /** GitHub's contents API takes base64 of the UTF-8 bytes. */

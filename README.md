@@ -4,9 +4,35 @@ An Obsidian plugin that publishes the active note to a GitHub repository, rewrit
 frontmatter properties and trimming private content on the way out. The note in your vault
 is never modified — every change applies only to the copy that lands in the repository.
 
+## Why this exists
+
+Posts for my [Eleventy](https://www.11ty.dev/) blog get written in Obsidian anyway, so the
+publishing step was the only part still done by hand: copy the note out of the vault, strip
+the properties that are for me rather than for the site, add the ones Eleventy's frontmatter
+expects, delete the working notes at the bottom, save it into the site repository's posts
+folder, commit, push. This plugin is that whole routine behind one command.
+
+Everything it does is shaped by that workflow:
+
+- **Vault properties and site properties are different sets.** The vault ones — status
+  markers, private links, anything used for organising notes — are stripped, and Eleventy's
+  own (`layout`, `date`, `tags`, `permalink`, whatever the site's collections need) are
+  written in with the values filled in at publish time.
+- **A note is longer than a post.** Drafting notes, sources, and to-dos live below a
+  horizontal rule and never leave the vault.
+- **The source note stays canonical.** The vault keeps the full note with its own
+  properties; only the copy sent to the repository is rewritten.
+- **Posts get republished.** A post is rarely right the first time, so publishing over an
+  existing file shows a diff against what is currently in the repository and takes a separate
+  confirmation before overwriting it.
+
+Nothing in it is Eleventy-specific — any repository-backed site with frontmatter-driven posts
+works the same way. Point the target folder at the site's posts directory (`src/posts`,
+`content/blog`, or wherever the collection reads from) and the rest is settings.
+
 ## The command
 
-`Publish to GitHub` (command palette) runs a two-step confirmation:
+`Publish to GitHub` (command palette) walks through:
 
 1. **Review window** — the complete frontmatter of the published copy, laid out for editing.
    The settings decide what it starts as; from there you can change any value, rename or
@@ -14,14 +40,38 @@ is never modified — every change applies only to the copy that lands in the re
    the settings, and restore anything the settings stripped. It also flags when content after
    the break marker will be dropped.
 2. **Preview window** — shows the exact markdown that will be committed, and where. `Back`
-   returns to the review window with your edits intact; `Publish` commits.
+   returns to the review window with your edits intact.
+3. **Overwrite confirmation** — only when a file is already at that path. See below.
 
 Edits in the review window apply to that one publish. Nothing there is written back to the
 note or to the settings.
 
+While the review window is open, the plugin checks the target path in the repository and
+reports what it finds: a new file, or one that is already there and would be replaced.
+
 Each property row shows where it came from — *from note*, *from settings*, or *added here* —
 along with its type. Values the inputs cannot represent (nested YAML, lists of objects) are
 shown read-only as *nested value* and passed through to the published copy untouched.
+
+## Republishing over an existing post
+
+When a file already exists at the target path — the usual case for a post being revised —
+the second window becomes a review of the changes rather than a plain preview:
+
+- A **Changes** view diffs the published copy against the file currently in the repository,
+  showing added and removed lines with three lines of context and collapsing long unchanged
+  runs. **Full document** switches to the complete output.
+- The header carries the line counts, `+N −M`.
+- Publishing is relabelled **Overwrite…** and opens a third confirmation naming the file,
+  the branch, and the size of the change.
+
+Two cases short-circuit the diff: an output identical to what is already there says so and
+offers nothing to change, and a file too large for GitHub to return inline cannot be diffed,
+which the window says plainly before letting you replace it.
+
+The commit is made against the exact version the diff was built from. If the file changes on
+GitHub between the diff and the confirmation, the commit is rejected rather than quietly
+overwriting the newer version, and the plugin tells you to publish again.
 
 ## Settings
 
@@ -32,7 +82,7 @@ shown read-only as *nested value* and passed through to the published copy untou
 | Repository owner / name | The target repository. |
 | Branch | Branch the commit lands on. Must already exist. |
 | Personal access token | Fine-grained token with **read & write** access to the repository's *Contents*. |
-| Target folder | Folder inside the repository to publish into. Empty means the repository root. |
+| Target folder | Folder inside the repository to publish into — the site's posts folder. Empty means the repository root. |
 | Mirror vault folder structure | Append the note's folder path inside the vault to the target folder. |
 | Commit message | Supports `{{filename}}`, `{{path}}` and `{{date}}`. |
 
