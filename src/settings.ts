@@ -1,4 +1,5 @@
 import { App, PluginSettingTab, Setting, Notice } from "obsidian";
+import type { ImageSizeStyle } from "./attachments";
 import type PublishToGithubPlugin from "./main";
 
 /** Property value types, mirroring Obsidian's own property types. */
@@ -40,6 +41,12 @@ export interface PublishToGithubSettings {
 	// Content transform
 	breakEnabled: boolean;
 	breakMarker: string;
+
+	// Attachments
+	uploadAttachments: boolean;
+	attachmentFolder: string;
+	attachmentUrlPrefix: string;
+	imageSizeStyle: ImageSizeStyle;
 }
 
 export const DEFAULT_SETTINGS: PublishToGithubSettings = {
@@ -56,6 +63,11 @@ export const DEFAULT_SETTINGS: PublishToGithubSettings = {
 
 	breakEnabled: true,
 	breakMarker: "---",
+
+	uploadAttachments: true,
+	attachmentFolder: "posts/attachments",
+	attachmentUrlPrefix: "/posts/attachments",
+	imageSizeStyle: "html",
 };
 
 export class PublishToGithubSettingTab extends PluginSettingTab {
@@ -74,6 +86,7 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 		this.renderPropertiesToAdd(containerEl);
 		this.renderPropertiesToRemove(containerEl);
 		this.renderContentBreak(containerEl);
+		this.renderAttachments(containerEl);
 	}
 
 	private async save() {
@@ -325,6 +338,66 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.breakMarker)
 					.onChange(async (value) => {
 						this.plugin.settings.breakMarker = value;
+						await this.save();
+					})
+			);
+	}
+
+	private renderAttachments(containerEl: HTMLElement) {
+		new Setting(containerEl).setName("Attachments").setHeading();
+
+		new Setting(containerEl)
+			.setName("Upload embedded images")
+			.setDesc(
+				"Find images embedded in the note, upload them to the repository, and rewrite the embeds to point at the uploaded copies."
+			)
+			.addToggle((toggle) =>
+				toggle.setValue(this.plugin.settings.uploadAttachments).onChange(async (value) => {
+					this.plugin.settings.uploadAttachments = value;
+					await this.save();
+				})
+			);
+
+		new Setting(containerEl)
+			.setName("Attachment folder")
+			.setDesc("Folder inside the repository that uploaded images are committed to.")
+			.addText((text) =>
+				text
+					.setPlaceholder("posts/attachments")
+					.setValue(this.plugin.settings.attachmentFolder)
+					.onChange(async (value) => {
+						this.plugin.settings.attachmentFolder = value.trim();
+						await this.save();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Attachment URL prefix")
+			.setDesc(
+				"What the rewritten embeds point at. Usually the attachment folder with a leading slash, since the site serves it from the root."
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder("/posts/attachments")
+					.setValue(this.plugin.settings.attachmentUrlPrefix)
+					.onChange(async (value) => {
+						this.plugin.settings.attachmentUrlPrefix = value.trim();
+						await this.save();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Image sizes")
+			.setDesc(
+				"Obsidian writes a size as ![[image.png|450]], which markdown has no way to express."
+			)
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("html", "Keep, as an <img width> tag")
+					.addOption("drop", "Drop, use plain markdown")
+					.setValue(this.plugin.settings.imageSizeStyle)
+					.onChange(async (value) => {
+						this.plugin.settings.imageSizeStyle = value as ImageSizeStyle;
 						await this.save();
 					})
 			);

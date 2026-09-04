@@ -20,6 +20,10 @@ Everything it does is shaped by that workflow:
   written in with the values filled in at publish time.
 - **A note is longer than a post.** Drafting notes, sources, and to-dos live below a
   horizontal rule and never leave the vault.
+- **Images are pasted into the vault, not the site.** Obsidian writes an embed as
+  `![[attachments/Pasted image 20260822005058.png|450]]`, which Eleventy cannot render and
+  which points at a file the site repository has never seen. The plugin uploads the image and
+  rewrites the embed to match.
 - **The source note stays canonical.** The vault keeps the full note with its own
   properties; only the copy sent to the repository is rewritten.
 - **Posts get republished.** A post is rarely right the first time, so publishing over an
@@ -38,7 +42,8 @@ works the same way. Point the target folder at the site's posts directory (`src/
    of the published copy, laid out for editing. The settings decide what it starts as; from
    there you can change any value, rename or retype any property, drop one with its trash
    button, add a new one that lives nowhere in the settings, and restore anything the settings
-   stripped. It also spells out what the break marker will cut.
+   stripped. It also lists the images it will upload, and spells out what the break marker
+   will cut.
 2. **Preview window** — shows the exact markdown that will be committed, and where. `Back`
    returns to the review window with your edits intact.
 3. **Overwrite confirmation** — only when a file is already at that path. See below.
@@ -58,6 +63,41 @@ filename re-checks the new path.
 Each property row shows where it came from — *from note*, *from settings*, or *added here* —
 along with its type. Values the inputs cannot represent (nested YAML, lists of objects) are
 shown read-only as *nested value* and passed through to the published copy untouched.
+
+## Images
+
+Obsidian embeds a pasted image as a wikilink with an optional size —
+`![[attachments/Pasted image 20260822005058.png|450]]` — which is neither markdown a static
+site generator will render nor a path that exists in the site repository. With attachment
+uploading on, publishing a post also:
+
+1. finds every embed in the part of the note being published (images below the break are
+   ignored, since they are not going anywhere),
+2. resolves each one against the vault exactly the way Obsidian resolves the link, so both
+   full vault paths and Obsidian's shortest-path names work,
+3. uploads it into the repository's attachment folder under a URL-safe name, and
+4. rewrites the embed to point at the uploaded copy.
+
+The review window lists every image with its size, the filename it will be uploaded under,
+and an alt text field — a wikilink embed carries no alt text, so this is the place to add it.
+Both are editable, and the resulting URL is shown beneath. An embed whose file cannot be found
+in the vault is flagged and left in the note exactly as written rather than being rewritten to
+a broken link.
+
+Images are uploaded **before** the post, so a post never lands referring to an image that
+failed to upload. An image already in the repository byte for byte is skipped rather than
+committed again — the plugin compares the git blob hash of the local file against the one
+GitHub reports. Each upload is its own commit, so publishing a post with two new images makes
+three commits.
+
+**Sizes.** `![[image.png|450]]` has no markdown equivalent. By default the size is kept by
+publishing an `<img src="…" alt="…" width="450">` tag, which any markdown renderer passes
+through; set *Image sizes* to `Drop` for plain `![alt](url)` markdown instead. Embeds with no
+size are always plain markdown.
+
+**What is left alone.** Links to the web, paths already rooted at the site (`/posts/…`), note
+transclusions and non-media embeds like `![[Some Note#Heading]]` or `.base` files, and
+anything inside a fenced or inline code block.
 
 ## Republishing over an existing post
 
@@ -135,6 +175,15 @@ about to be dropped, and offers the dropped content for inspection; when the cut
 more than half the note, it says so as a warning rather than a note. If your notes use `---`
 freely, set the marker to something that cannot collide — `%%publish-break%%` uses Obsidian's
 comment syntax and stays invisible in reading view.
+
+### Attachments
+
+| Setting | Meaning |
+| --- | --- |
+| Upload embedded images | Whether to handle embeds at all. Off leaves every embed untouched. |
+| Attachment folder | Folder inside the repository that images are committed to. |
+| Attachment URL prefix | What the rewritten embeds point at — usually the attachment folder with a leading slash, since the site serves it from the root. |
+| Image sizes | Keep an Obsidian size as an `<img width>` tag, or drop it for plain markdown. |
 
 ## Building
 

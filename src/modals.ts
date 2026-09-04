@@ -11,6 +11,7 @@ import {
 	ToggleComponent,
 	stringifyYaml,
 } from "obsidian";
+import { attachmentUrl, type Embed } from "./attachments";
 import { diffLines, type DiffLine, type DiffResult } from "./diff";
 import type { RemoteFile } from "./github";
 import { PROPERTY_TYPE_LABELS, type PropertyType } from "./settings";
@@ -25,11 +26,28 @@ import {
 	type PropertyOrigin,
 } from "./transform";
 
+/** Above this, an image is worth flagging before it is committed. */
+const LARGE_ATTACHMENT = 5 * 1024 * 1024;
+
 const ORIGIN_LABELS: Record<PropertyOrigin, string> = {
 	note: "from note",
 	settings: "from settings",
 	manual: "added here",
 };
+
+/** An embed paired with the vault file it points at and how it will be published. */
+export interface Attachment {
+	embed: Embed;
+	/** The vault file, or null when the link resolves to nothing. */
+	file: { name: string; path: string } | null;
+	/** Filename inside the repository's attachment folder. Edited in place. */
+	fileName: string;
+	/** Alt text for the published embed. Edited in place. */
+	alt: string;
+	/** Size of the vault file in bytes, 0 when it could not be found. */
+	size: number;
+	missing: boolean;
+}
 
 export interface ReviewContext {
 	/** Vault path of the note being published. */
@@ -46,6 +64,9 @@ export interface ReviewContext {
 	properties: OutgoingProperty[];
 	/** Properties the settings stripped, offered back for restoring. Edited in place. */
 	removed: OutgoingProperty[];
+	/** Images embedded in the published portion of the note. Edited in place. */
+	attachments: Attachment[];
+	attachmentUrlPrefix: string;
 	breakResult: BreakResult;
 	frontmatterError: string | null;
 }
@@ -115,6 +136,8 @@ export class ReviewModal extends Modal {
 		);
 
 		this.removedEl = contentEl.createDiv();
+
+		this.renderAttachments(contentEl);
 
 		this.destinationEl = contentEl.createDiv({ cls: "ptg-destination" });
 		this.runLookup();
@@ -213,6 +236,80 @@ export class ReviewModal extends Modal {
 				container.addClass("ptg-warning");
 				container.setText(`Could not check the destination: ${error.message}`);
 			});
+	}
+
+	/** Images found in the note, with the name and alt text they publish under. */
+	private renderAttachments(contentEl: HTMLElement): void {
+		const attachments = this.context.attachments;
+		if (attachments.length === 0) return;
+
+		contentEl.createEl("h3", { text: "Images" });
+		contentEl.createEl("p", {
+			cls: "ptg-hint",
+			text: "Embeds in the published part of the note. Each is uploaded to the repository and its link rewritten to point there.",
+		});
+
+		const missing = attachments.filter((a) => a.missing);
+		if (missing.length > 0) {
+			contentEl.createDiv({
+				cls: "ptg-warning",
+				text: `${missing.length} embed${missing.length === 1 ? "" : "s"} could not be found in the vault. ${
+					missing.length === 1 ? "It" : "They"
+				} will be left exactly as written.`,
+			});
+		}
+
+		const list = contentEl.createDiv({ cls: "ptg-property-list" });
+
+		for (const attachment of attachments) {
+			const row = list.createDiv({ cls: "ptg-property" });
+			const head = row.createDiv({ cls: "ptg-property-head" });
+
+			head.createSpan({ cls: "ptg-attachment-source", text: attachment.embed.linkpath });
+			if (attachment.embed.width !== null) {
+				head.createSpan({ cls: "ptg-origin", text: `${attachment.embed.width}px` });
+			}
+			head.createSpan({
+				cls: attachment.missing ? "ptg-attachment-missing" : "ptg-origin",
+				text: attachment.missing ? "not found" : formatBytes(attachment.size),
+			});
+
+			if (attachment.missing) continue;
+
+			if (attachment.size > LARGE_ATTACHMENT) {
+				row.createDiv({
+					cls: "ptg-warning",
+					text: `${formatBytes(
+						attachment.size
+					)} is large for a web page, and GitHub may refuse to commit it. Consider shrinking it in the vault first.`,
+				});
+			}
+
+			const nameRow = row.createDiv({ cls: "ptg-attachment-field" });
+			nameRow.createSpan({ cls: "ptg-label", text: "Name" });
+			const name = new TextComponent(nameRow);
+			name.inputEl.addClass("ptg-value-input");
+
+			const altRow = row.createDiv({ cls: "ptg-attachment-field" });
+			altRow.createSpan({ cls: "ptg-label", text: "Alt text" });
+			const alt = new TextComponent(altRow)
+				.setPlaceholder("describe the image")
+				.setValue(attachment.alt)
+				.onChange((value) => {
+					attachment.alt = value;
+				});
+			alt.inputEl.addClass("ptg-value-input");
+
+			const urlEl = row.createDiv({ cls: "ptg-attachment-url" });
+			const showUrl = () =>
+				urlEl.setText(attachmentUrl(this.context.attachmentUrlPrefix, attachment.fileName));
+
+			name.setValue(attachment.fileName).onChange((value) => {
+				attachment.fileName = value.trim();
+				showUrl();
+			});
+			showUrl();
+		}
 	}
 
 	/**
@@ -436,6 +533,7 @@ export interface PreviewOptions {
 	output: string;
 	/** The file currently at the target path, or null when the path is free. */
 	remote: RemoteFile | null;
+	attachments: Attachment[];
 	/** Set when the destination lookup failed, so the diff could not be built. */
 	remoteError: string | null;
 	onBack: () => void;
@@ -474,6 +572,7 @@ export class PreviewModal extends Modal {
 		});
 
 		this.renderStatus(contentEl);
+		this.renderAttachmentSummary(contentEl);
 		this.renderViewSwitch(contentEl);
 		this.bodyEl = contentEl.createDiv();
 		this.renderBody();
@@ -529,6 +628,21 @@ export class PreviewModal extends Modal {
 				cls: "ptg-hint",
 				text: "The documents differ too much to match up line by line, so the whole file is shown as replaced.",
 			});
+		}
+	}
+
+	/** Names the images that will be committed alongside the post. */
+	private renderAttachmentSummary(contentEl: HTMLElement): void {
+		const uploading = this.options.attachments.filter((a) => !a.missing && a.fileName.length > 0);
+		if (uploading.length === 0) return;
+
+		const box = contentEl.createDiv({ cls: "ptg-note" });
+		box.createDiv({
+			text: `${uploading.length} image${uploading.length === 1 ? "" : "s"} will be uploaded before the post, each as its own commit:`,
+		});
+		const list = box.createEl("ul", { cls: "ptg-removed-list" });
+		for (const attachment of uploading) {
+			list.createEl("li", { text: attachment.fileName });
 		}
 	}
 
@@ -696,6 +810,12 @@ export class ConfirmOverwriteModal extends Modal {
 /** True when the diff has something worth rendering as added and removed lines. */
 function hasLineChanges(diff: DiffResult | null): diff is DiffResult {
 	return diff !== null && !diff.identical && !diff.whitespaceOnly;
+}
+
+function formatBytes(bytes: number): string {
+	if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+	if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+	return `${bytes} B`;
 }
 
 function diffLineText(line: DiffLine): string {

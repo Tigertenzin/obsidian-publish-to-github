@@ -1,6 +1,13 @@
 import { MarkdownView, Notice, Plugin, TFile, moment } from "obsidian";
-import { GithubClient, type RemoteFile } from "./github";
-import { PreviewModal, ReviewModal, type ReviewContext } from "./modals";
+import {
+	attachmentUrl,
+	findEmbeds,
+	renderEmbed,
+	rewriteBody,
+	sanitiseAttachmentName,
+} from "./attachments";
+import { GithubClient, gitBlobSha, type RemoteFile } from "./github";
+import { PreviewModal, ReviewModal, type Attachment, type ReviewContext } from "./modals";
 import {
 	DEFAULT_SETTINGS,
 	PublishToGithubSettingTab,
@@ -75,6 +82,11 @@ export default class PublishToGithubPlugin extends Plugin {
 		const note = parseNote(content);
 		const { properties, removed } = resolveProperties(note.frontmatter, this.settings);
 
+		// Embeds are collected from the body that will actually be published, so
+		// images sitting below the break are never uploaded.
+		const breakResult = applyBreak(note.body, this.settings);
+		const attachments = this.collectAttachments(file, breakResult.body);
+
 		// One lookup per path, shared by both windows, so stepping back and forth
 		// and retyping a name does not re-query GitHub for a path already seen.
 		const lookups = new Map<string, Promise<RemoteFile | null>>();
@@ -98,11 +110,81 @@ export default class PublishToGithubPlugin extends Plugin {
 			lookup,
 			properties,
 			removed,
-			breakResult: applyBreak(note.body, this.settings),
+			attachments,
+			attachmentUrlPrefix: this.settings.attachmentUrlPrefix,
+			breakResult,
 			frontmatterError: note.frontmatterError,
 		};
 
 		this.openReview(file, note, context);
+	}
+
+	/** Finds the note's embeds and pairs each with the vault file it points at. */
+	private collectAttachments(source: TFile, body: string): Attachment[] {
+		if (!this.settings.uploadAttachments) return [];
+
+		const taken = new Set<string>();
+
+		return findEmbeds(body).map((embed) => {
+			// Resolved the way Obsidian resolves the link itself, so shortest-path
+			// names and full vault paths both land on the right file.
+			const target = this.app.metadataCache.getFirstLinkpathDest(embed.linkpath, source.path);
+
+			let fileName = "";
+			if (target) {
+				fileName = sanitiseAttachmentName(target.name);
+				// Two different images can sanitise to the same name; keep them apart.
+				if (taken.has(fileName)) {
+					const at = fileName.lastIndexOf(".");
+					const stem = at === -1 ? fileName : fileName.slice(0, at);
+					const extension = at === -1 ? "" : fileName.slice(at);
+					let suffix = 2;
+					while (taken.has(`${stem}-${suffix}${extension}`)) suffix++;
+					fileName = `${stem}-${suffix}${extension}`;
+				}
+				taken.add(fileName);
+			}
+
+			return {
+				embed,
+				file: target,
+				fileName,
+				alt: embed.alt,
+				size: target?.stat.size ?? 0,
+				missing: target === null,
+			};
+		});
+	}
+
+	/**
+	 * Uploads each attachment that is not already in the repository unchanged.
+	 * Runs before the post is written, so the post never lands referring to an
+	 * image that failed to upload.
+	 */
+	private async uploadAttachments(attachments: Attachment[], postName: string): Promise<void> {
+		const uploadable = attachments.filter((item) => item.file !== null && item.fileName.length > 0);
+		if (uploadable.length === 0) return;
+
+		let index = 0;
+		for (const attachment of uploadable) {
+			index++;
+			const path = joinPath(this.settings.attachmentFolder, attachment.fileName);
+			const bytes = await this.app.vault.readBinary(attachment.file as TFile);
+
+			const existing = await this.client.getFile(path).catch(() => null);
+			const localSha = await gitBlobSha(bytes);
+			if (existing && localSha && existing.sha === localSha) {
+				continue;
+			}
+
+			new Notice(`Uploading attachment ${index} of ${uploadable.length}: ${attachment.fileName}`, 3000);
+			await this.client.publishBinary(
+				path,
+				bytes,
+				`Add ${attachment.fileName} for ${postName}`,
+				existing?.sha ?? null
+			);
+		}
 	}
 
 	private openReview(file: TFile, note: ParsedNote, context: ReviewContext) {
@@ -113,8 +195,27 @@ export default class PublishToGithubPlugin extends Plugin {
 		}).open();
 	}
 
+	/** The note body with every embed rewritten to point at its uploaded copy. */
+	private publishedBody(context: ReviewContext): string {
+		const replacements = context.attachments
+			.filter((attachment) => !attachment.missing && attachment.fileName.length > 0)
+			.map((attachment) => ({
+				index: attachment.embed.index,
+				length: attachment.embed.length,
+				text: renderEmbed(
+					attachment.alt,
+					attachmentUrl(this.settings.attachmentUrlPrefix, attachment.fileName),
+					attachment.embed.width,
+					this.settings.imageSizeStyle
+				),
+			}));
+
+		return rewriteBody(context.breakResult.body, replacements);
+	}
+
 	private async openPreview(file: TFile, note: ParsedNote, context: ReviewContext) {
-		const output = buildOutput(note, context.properties, this.settings);
+		// The break is already applied to the body the embeds were found in.
+		const output = buildOutput({ ...note, body: this.publishedBody(context) }, context.properties, this.settings);
 		const targetPath = context.resolvePath(context.fileName);
 
 		let remote: RemoteFile | null = null;
@@ -135,13 +236,36 @@ export default class PublishToGithubPlugin extends Plugin {
 			onBack: () => this.openReview(file, note, context),
 			// The SHA the diff was built against, so a file that moved on underneath
 			// us is rejected rather than clobbered. Undefined means "look it up".
+			attachments: context.attachments,
 			onPublish: () =>
-				this.commit(file, targetPath, output, remoteError ? undefined : remote?.sha ?? null),
+				this.commit(
+					file,
+					targetPath,
+					output,
+					context.attachments,
+					remoteError ? undefined : remote?.sha ?? null
+				),
 		}).open();
 	}
 
-	private async commit(file: TFile, targetPath: string, output: string, expectedSha?: string | null) {
+	private async commit(
+		file: TFile,
+		targetPath: string,
+		output: string,
+		attachments: Attachment[],
+		expectedSha?: string | null
+	) {
 		const message = this.commitMessage(file, targetPath);
+
+		try {
+			await this.uploadAttachments(attachments, file.basename);
+		} catch (error) {
+			new Notice(
+				`Attachment upload failed, so the post was not published: ${(error as Error).message}`,
+				10000
+			);
+			throw error;
+		}
 
 		try {
 			const result = await this.client.publish(targetPath, output, message, expectedSha);
@@ -162,4 +286,11 @@ export default class PublishToGithubPlugin extends Plugin {
 			.replace(/\{\{path\}\}/g, targetPath)
 			.replace(/\{\{date\}\}/g, moment().format("YYYY-MM-DD"));
 	}
+}
+
+/** Joins a repository folder and a filename, tolerating stray slashes. */
+function joinPath(folder: string, name: string): string {
+	const base = folder.replace(/^\/+|\/+$/g, "").trim();
+	const leaf = name.replace(/^\/+/, "");
+	return base.length > 0 ? `${base}/${leaf}` : leaf;
 }

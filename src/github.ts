@@ -102,13 +102,32 @@ export class GithubClient {
 		message: string,
 		expectedSha?: string | null
 	): Promise<PublishResult> {
+		return this.put(path, toBase64(content), message, expectedSha);
+	}
+
+	/** Commits raw bytes — an image or other attachment read from the vault. */
+	async publishBinary(
+		path: string,
+		bytes: ArrayBuffer,
+		message: string,
+		expectedSha?: string | null
+	): Promise<PublishResult> {
+		return this.put(path, bytesToBase64(new Uint8Array(bytes)), message, expectedSha);
+	}
+
+	private async put(
+		path: string,
+		base64: string,
+		message: string,
+		expectedSha?: string | null
+	): Promise<PublishResult> {
 		this.assertConfigured();
 		const { owner, repo, branch } = this.settings;
 
 		const sha = expectedSha === undefined ? (await this.getFile(path))?.sha ?? null : expectedSha;
 		const response = await this.request("PUT", `/repos/${owner}/${repo}/contents/${encodePath(path)}`, {
 			message,
-			content: toBase64(content),
+			content: base64,
 			branch,
 			...(sha ? { sha } : {}),
 		});
@@ -165,6 +184,40 @@ function encodePath(path: string): string {
 		.join("/");
 }
 
+/**
+ * The SHA git would give these bytes, so an attachment already in the repository
+ * unchanged can be recognised and skipped rather than committed again.
+ * Returns null where SubtleCrypto is unavailable, meaning "cannot tell".
+ */
+export async function gitBlobSha(bytes: ArrayBuffer): Promise<string | null> {
+	const subtle = globalThis.crypto?.subtle;
+	if (!subtle) return null;
+
+	const header = new TextEncoder().encode(`blob ${bytes.byteLength}\0`);
+	const payload = new Uint8Array(header.length + bytes.byteLength);
+	payload.set(header, 0);
+	payload.set(new Uint8Array(bytes), header.length);
+
+	try {
+		const digest = await subtle.digest("SHA-1", payload);
+		return Array.from(new Uint8Array(digest))
+			.map((byte) => byte.toString(16).padStart(2, "0"))
+			.join("");
+	} catch {
+		return null;
+	}
+}
+
+/** Base64 of raw bytes, chunked to stay clear of the argument limit. */
+export function bytesToBase64(bytes: Uint8Array): string {
+	let binary = "";
+	const chunkSize = 0x8000;
+	for (let i = 0; i < bytes.length; i += chunkSize) {
+		binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+	}
+	return btoa(binary);
+}
+
 /** Decodes the base64 body GitHub returns for a file. */
 export function fromBase64(encoded: string): string {
 	const binary = atob(encoded.replace(/\s/g, ""));
@@ -177,11 +230,5 @@ export function fromBase64(encoded: string): string {
 
 /** GitHub's contents API takes base64 of the UTF-8 bytes. */
 export function toBase64(content: string): string {
-	const bytes = new TextEncoder().encode(content);
-	let binary = "";
-	const chunkSize = 0x8000;
-	for (let i = 0; i < bytes.length; i += chunkSize) {
-		binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-	}
-	return btoa(binary);
+	return bytesToBase64(new TextEncoder().encode(content));
 }
