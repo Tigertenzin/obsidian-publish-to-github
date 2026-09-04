@@ -16,8 +16,10 @@ import type { RemoteFile } from "./github";
 import { PROPERTY_TYPE_LABELS, type PropertyType } from "./settings";
 import {
 	convertValue,
+	normaliseFileName,
 	parseValue,
 	valueToInput,
+	type BreakResult,
 	type EditableType,
 	type OutgoingProperty,
 	type PropertyOrigin,
@@ -32,17 +34,20 @@ const ORIGIN_LABELS: Record<PropertyOrigin, string> = {
 export interface ReviewContext {
 	/** Vault path of the note being published. */
 	sourcePath: string;
-	/** Path the note will occupy inside the repository. */
-	targetPath: string;
+	/** Filename inside the repository, edited in place by the review window. */
+	fileName: string;
 	repoLabel: string;
+	branch: string;
+	/** Turns the filename as typed into the full path inside the repository. */
+	resolvePath: (fileName: string) => string;
+	/** Reads whatever is at a path, cached per path across both windows. */
+	lookup: (path: string) => Promise<RemoteFile | null>;
 	/** Every property the published copy will carry. Edited in place. */
 	properties: OutgoingProperty[];
 	/** Properties the settings stripped, offered back for restoring. Edited in place. */
 	removed: OutgoingProperty[];
-	contentTrimmed: boolean;
+	breakResult: BreakResult;
 	frontmatterError: string | null;
-	/** The file already at the target path, looked up once per publish run. */
-	remote: Promise<RemoteFile | null>;
 }
 
 /**
@@ -53,8 +58,13 @@ export interface ReviewContext {
 export class ReviewModal extends Modal {
 	private listEl!: HTMLElement;
 	private removedEl!: HTMLElement;
+	private pathEl!: HTMLElement;
+	private destinationEl!: HTMLElement;
 	/** Key of the row whose name field should take focus after the next render. */
 	private focusKeyOf: OutgoingProperty | null = null;
+	/** Guards against a slow destination check overwriting a newer one. */
+	private lookupSeq = 0;
+	private lookupTimer: number | null = null;
 
 	constructor(
 		app: App,
@@ -77,7 +87,9 @@ export class ReviewModal extends Modal {
 			.append(createLabel("Note"), createValue(this.context.sourcePath));
 		summary
 			.createDiv({ cls: "ptg-summary-row" })
-			.append(createLabel("Destination"), createValue(`${this.context.repoLabel} · ${this.context.targetPath}`));
+			.append(createLabel("Repository"), createValue(`${this.context.repoLabel} · ${this.context.branch}`));
+
+		this.renderFileName(summary);
 
 		if (this.context.frontmatterError) {
 			contentEl.createDiv({
@@ -104,14 +116,10 @@ export class ReviewModal extends Modal {
 
 		this.removedEl = contentEl.createDiv();
 
-		this.renderDestinationStatus(contentEl.createDiv({ cls: "ptg-destination" }));
+		this.destinationEl = contentEl.createDiv({ cls: "ptg-destination" });
+		this.runLookup();
 
-		if (this.context.contentTrimmed) {
-			contentEl.createDiv({
-				cls: "ptg-note",
-				text: "Content after the break marker will be left out of the published copy.",
-			});
-		}
+		this.renderBreakWarning(contentEl);
 
 		new Setting(contentEl)
 			.addButton((button) => button.setButtonText("Cancel").onClick(() => this.close()))
@@ -133,14 +141,62 @@ export class ReviewModal extends Modal {
 		this.refresh();
 	}
 
-	/** Reports whether the target path is already taken, once GitHub answers. */
-	private renderDestinationStatus(container: HTMLElement): void {
-		container.setText("Checking the repository…");
-		container.addClass("ptg-checking");
+	/** The filename the post is published under, editable before publishing. */
+	private renderFileName(summary: HTMLElement): void {
+		const row = summary.createDiv({ cls: "ptg-summary-row" });
+		row.append(createLabel("Filename"));
 
-		this.context.remote
+		const input = new TextComponent(row)
+			.setPlaceholder("post-name.md")
+			.setValue(this.context.fileName)
+			.onChange((value) => {
+				this.context.fileName = value;
+				this.renderPath();
+				// The destination depends on the name, so re-check it as it settles.
+				this.scheduleLookup();
+			});
+		input.inputEl.addClass("ptg-filename-input");
+
+		this.pathEl = summary.createDiv({ cls: "ptg-summary-row ptg-path-row" });
+		this.renderPath();
+	}
+
+	private renderPath(): void {
+		const path = this.context.resolvePath(this.context.fileName);
+		this.pathEl.empty();
+		this.pathEl.append(createLabel("Publishes to"), createValue(path || "—"));
+	}
+
+	/** Re-checks the destination a moment after typing stops. */
+	private scheduleLookup(): void {
+		if (this.lookupTimer !== null) window.clearTimeout(this.lookupTimer);
+		this.lookupTimer = window.setTimeout(() => {
+			this.lookupTimer = null;
+			this.runLookup();
+		}, 400);
+	}
+
+	/** Reports whether the target path is already taken, once GitHub answers. */
+	private runLookup(): void {
+		const container = this.destinationEl;
+		const path = this.context.resolvePath(this.context.fileName);
+		const seq = ++this.lookupSeq;
+
+		container.removeClass("ptg-destination-exists", "ptg-warning");
+		container.addClass("ptg-checking");
+		container.setText("Checking the repository…");
+
+		if (path.length === 0) {
+			container.removeClass("ptg-checking");
+			container.addClass("ptg-warning");
+			container.setText("Give the file a name before publishing.");
+			return;
+		}
+
+		this.context
+			.lookup(path)
 			.then((remote) => {
-				if (!container.isConnected) return;
+				if (seq !== this.lookupSeq || !container.isConnected) return;
 				container.removeClass("ptg-checking");
 				if (remote) {
 					container.addClass("ptg-destination-exists");
@@ -152,11 +208,42 @@ export class ReviewModal extends Modal {
 				}
 			})
 			.catch((error: Error) => {
-				if (!container.isConnected) return;
+				if (seq !== this.lookupSeq || !container.isConnected) return;
 				container.removeClass("ptg-checking");
 				container.addClass("ptg-warning");
 				container.setText(`Could not check the destination: ${error.message}`);
 			});
+	}
+
+	/**
+	 * Shows what the break marker cuts. The default marker is a horizontal rule,
+	 * which is common mid-note, so the amount being dropped is spelled out.
+	 */
+	private renderBreakWarning(contentEl: HTMLElement): void {
+		const result = this.context.breakResult;
+		if (!result.trimmed) return;
+
+		const heavy = result.droppedLines > result.keptLines;
+		const box = contentEl.createDiv({ cls: heavy ? "ptg-warning" : "ptg-note" });
+
+		box.createDiv({
+			cls: "ptg-break-headline",
+			text: `Break marker on body line ${result.markerLine + 1}: ${result.droppedLines} of ${
+				result.keptLines + result.droppedLines
+			} lines will be left out.`,
+		});
+
+		if (heavy) {
+			box.createDiv({
+				cls: "ptg-break-headline",
+				text: "That is more than half the note — check the marker is where you meant it.",
+			});
+		}
+
+		const details = box.createEl("details", { cls: "ptg-break-details" });
+		details.createEl("summary", { text: "Show what will be dropped" });
+		const pre = details.createEl("pre", { cls: "ptg-preview ptg-break-preview" });
+		pre.createEl("code", { text: result.dropped });
 	}
 
 	private refresh(): void {
@@ -173,6 +260,10 @@ export class ReviewModal extends Modal {
 
 	/** Blocks the step forward on duplicate keys, which would silently drop a property. */
 	private validate(): string | null {
+		if (normaliseFileName(this.context.fileName).length === 0) {
+			return "Give the file a name before publishing.";
+		}
+
 		const seen = new Set<string>();
 		for (const property of this.context.properties) {
 			const key = property.key.trim();
@@ -333,6 +424,7 @@ export class ReviewModal extends Modal {
 	}
 
 	onClose(): void {
+		if (this.lookupTimer !== null) window.clearTimeout(this.lookupTimer);
 		this.contentEl.empty();
 	}
 }

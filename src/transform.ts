@@ -204,20 +204,57 @@ export function valueToInput(value: PropertyValue, type: PropertyType): string {
 	return String(value);
 }
 
-/** Drops everything from the first line that matches the break marker onwards. */
-export function applyBreak(body: string, settings: PublishToGithubSettings): { body: string; trimmed: boolean } {
+/** What the break marker does to a note's body. */
+export interface BreakResult {
+	/** The body that will be published. */
+	body: string;
+	trimmed: boolean;
+	/** Body line the marker sits on, or -1 when there is none. */
+	markerLine: number;
+	keptLines: number;
+	droppedLines: number;
+	/** The content the break keeps out of the published copy. */
+	dropped: string;
+}
+
+/**
+ * Drops everything from the first line that matches the break marker onwards.
+ * Reports what was dropped so the review window can show it — the default marker
+ * is a horizontal rule, which is easy to use mid-note without meaning to cut.
+ */
+export function applyBreak(body: string, settings: PublishToGithubSettings): BreakResult {
 	const marker = settings.breakMarker.trim();
-	if (!settings.breakEnabled || marker.length === 0) {
-		return { body, trimmed: false };
-	}
-
 	const lines = body.split("\n");
-	const index = lines.findIndex((line) => line.trim() === marker);
-	if (index === -1) {
-		return { body, trimmed: false };
-	}
+	const untouched: BreakResult = {
+		body,
+		trimmed: false,
+		markerLine: -1,
+		keptLines: countLines(lines),
+		droppedLines: 0,
+		dropped: "",
+	};
 
-	return { body: lines.slice(0, index).join("\n"), trimmed: true };
+	if (!settings.breakEnabled || marker.length === 0) return untouched;
+
+	const index = lines.findIndex((line) => line.trim() === marker);
+	if (index === -1) return untouched;
+
+	const kept = lines.slice(0, index);
+	const dropped = lines.slice(index);
+
+	return {
+		body: kept.join("\n"),
+		trimmed: true,
+		markerLine: index,
+		keptLines: kept.length,
+		droppedLines: countLines(dropped),
+		dropped: dropped.join("\n"),
+	};
+}
+
+/** Counts real lines, ignoring the empty entry a trailing newline leaves behind. */
+function countLines(lines: string[]): number {
+	return lines.length - (lines.length > 0 && lines[lines.length - 1] === "" ? 1 : 0);
 }
 
 /**
@@ -287,15 +324,43 @@ function unquoteDates(yaml: string, dateKeys: Set<string>): string {
 		.join("\n");
 }
 
-/** Resolves the path the note is written to inside the repository. */
-export function buildTargetPath(vaultPath: string, settings: PublishToGithubSettings): string {
-	const fileName = vaultPath.split("/").pop() ?? vaultPath;
-	const vaultFolder = vaultPath.slice(0, Math.max(0, vaultPath.length - fileName.length));
+/** The filename a note is published under before the user edits it. */
+export function defaultFileName(vaultPath: string): string {
+	return vaultPath.split("/").pop() ?? vaultPath;
+}
+
+/**
+ * Cleans up a filename typed in the review window. Slashes are kept, so a name
+ * can nest the post a level deeper, but the path cannot climb out of the target
+ * folder and always ends in .md.
+ */
+export function normaliseFileName(name: string): string {
+	const cleaned = name
+		.split("/")
+		.map((segment) => segment.trim())
+		.filter((segment) => segment.length > 0 && segment !== "." && segment !== "..")
+		.join("/");
+
+	if (cleaned.length === 0) return "";
+	return /\.[a-z0-9]+$/i.test(cleaned) ? cleaned : `${cleaned}.md`;
+}
+
+/**
+ * Resolves the path the note is written to inside the repository, given the
+ * filename as it stands in the review window.
+ */
+export function buildTargetPath(
+	vaultPath: string,
+	fileName: string,
+	settings: PublishToGithubSettings
+): string {
+	const sourceName = defaultFileName(vaultPath);
+	const vaultFolder = vaultPath.slice(0, Math.max(0, vaultPath.length - sourceName.length));
 
 	const segments = [
 		normaliseSegment(settings.targetFolder),
 		settings.preserveFolderStructure ? normaliseSegment(vaultFolder) : "",
-		fileName,
+		normaliseFileName(fileName),
 	].filter((segment) => segment.length > 0);
 
 	return segments.join("/");

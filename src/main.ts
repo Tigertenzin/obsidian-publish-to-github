@@ -10,6 +10,7 @@ import {
 	applyBreak,
 	buildOutput,
 	buildTargetPath,
+	defaultFileName,
 	parseNote,
 	resolveProperties,
 	type ParsedNote,
@@ -73,23 +74,33 @@ export default class PublishToGithubPlugin extends Plugin {
 
 		const note = parseNote(content);
 		const { properties, removed } = resolveProperties(note.frontmatter, this.settings);
-		const targetPath = buildTargetPath(file.path, this.settings);
+
+		// One lookup per path, shared by both windows, so stepping back and forth
+		// and retyping a name does not re-query GitHub for a path already seen.
+		const lookups = new Map<string, Promise<RemoteFile | null>>();
+		const lookup = (path: string): Promise<RemoteFile | null> => {
+			const cached = lookups.get(path);
+			if (cached) return cached;
+
+			const pending = this.client.getFile(path);
+			// The windows report the failure; nothing is unhandled if it rejects.
+			pending.catch(() => undefined);
+			lookups.set(path, pending);
+			return pending;
+		};
 
 		const context: ReviewContext = {
 			sourcePath: file.path,
-			targetPath,
+			fileName: defaultFileName(file.path),
 			repoLabel: `${this.settings.owner}/${this.settings.repo}`,
+			branch: this.settings.branch,
+			resolvePath: (fileName) => buildTargetPath(file.path, fileName, this.settings),
+			lookup,
 			properties,
 			removed,
-			contentTrimmed: applyBreak(note.body, this.settings).trimmed,
+			breakResult: applyBreak(note.body, this.settings),
 			frontmatterError: note.frontmatterError,
-			// Started here and reused by both windows, so stepping back and forth
-			// does not re-query GitHub.
-			remote: this.client.getFile(targetPath),
 		};
-
-		// The review window reports the failure; nothing is unhandled if it rejects.
-		context.remote.catch(() => undefined);
 
 		this.openReview(file, note, context);
 	}
@@ -104,17 +115,18 @@ export default class PublishToGithubPlugin extends Plugin {
 
 	private async openPreview(file: TFile, note: ParsedNote, context: ReviewContext) {
 		const output = buildOutput(note, context.properties, this.settings);
+		const targetPath = context.resolvePath(context.fileName);
 
 		let remote: RemoteFile | null = null;
 		let remoteError: string | null = null;
 		try {
-			remote = await context.remote;
+			remote = await context.lookup(targetPath);
 		} catch (error) {
 			remoteError = (error as Error).message;
 		}
 
 		new PreviewModal(this.app, {
-			targetPath: context.targetPath,
+			targetPath,
 			repoLabel: context.repoLabel,
 			branch: this.settings.branch,
 			output,
@@ -124,7 +136,7 @@ export default class PublishToGithubPlugin extends Plugin {
 			// The SHA the diff was built against, so a file that moved on underneath
 			// us is rejected rather than clobbered. Undefined means "look it up".
 			onPublish: () =>
-				this.commit(file, context.targetPath, output, remoteError ? undefined : remote?.sha ?? null),
+				this.commit(file, targetPath, output, remoteError ? undefined : remote?.sha ?? null),
 		}).open();
 	}
 

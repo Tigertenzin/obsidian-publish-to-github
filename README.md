@@ -34,11 +34,11 @@ works the same way. Point the target folder at the site's posts directory (`src/
 
 `Publish to GitHub` (command palette) walks through:
 
-1. **Review window** — the complete frontmatter of the published copy, laid out for editing.
-   The settings decide what it starts as; from there you can change any value, rename or
-   retype any property, drop one with its trash button, add a new one that lives nowhere in
-   the settings, and restore anything the settings stripped. It also flags when content after
-   the break marker will be dropped.
+1. **Review window** — the filename the post is published under, and the complete frontmatter
+   of the published copy, laid out for editing. The settings decide what it starts as; from
+   there you can change any value, rename or retype any property, drop one with its trash
+   button, add a new one that lives nowhere in the settings, and restore anything the settings
+   stripped. It also spells out what the break marker will cut.
 2. **Preview window** — shows the exact markdown that will be committed, and where. `Back`
    returns to the review window with your edits intact.
 3. **Overwrite confirmation** — only when a file is already at that path. See below.
@@ -46,8 +46,14 @@ works the same way. Point the target folder at the site's posts directory (`src/
 Edits in the review window apply to that one publish. Nothing there is written back to the
 note or to the settings.
 
-While the review window is open, the plugin checks the target path in the repository and
-reports what it finds: a new file, or one that is already there and would be replaced.
+The **filename** field starts as the note's own name and is yours to change — posts are
+usually titled one way in the vault and slugged another on the site. It accepts a name with
+or without `.md`, and a name containing slashes nests the post further inside the target
+folder. The full path it resolves to is shown directly underneath.
+
+While the review window is open, the plugin checks that path in the repository and reports
+what it finds: a new file, or one that is already there and would be replaced. Editing the
+filename re-checks the new path.
 
 Each property row shows where it came from — *from note*, *from settings*, or *added here* —
 along with its type. Values the inputs cannot represent (nested YAML, lists of objects) are
@@ -121,6 +127,14 @@ out. The default marker is `---`, a horizontal rule, so a note can carry private
 below the rule and publish only what sits above it. The marker is matched against a whole line,
 ignoring surrounding whitespace, and is only searched in the body — the frontmatter delimiters
 are never mistaken for it.
+
+**A horizontal rule is also an ordinary way to separate sections**, and the break takes the
+*first* one it finds. A note that uses `---` between sections will be cut at the first of them.
+So the review window always reports which line the marker was found on, how many lines are
+about to be dropped, and offers the dropped content for inspection; when the cut would remove
+more than half the note, it says so as a warning rather than a note. If your notes use `---`
+freely, set the marker to something that cannot collide — `%%publish-break%%` uses Obsidian's
+comment syntax and stays invisible in reading view.
 
 ## Building
 

@@ -15,7 +15,8 @@
 .ptg-summary-row {
 	display: flex;
 	gap: 0.6em;
-	align-items: baseline;
+	align-items: center;
+	margin-bottom: 0.3em;
 	font-size: var(--font-ui-small);
 	color: var(--text-muted);
 	word-break: break-all;
@@ -246,4 +247,39 @@
 .ptg-stat-remove {
 	color: var(--color-red);
 	font-weight: var(--font-medium);
+}
+
+/* Filename field and resolved path */
+
+.ptg-filename-input {
+	flex: 1 1 auto;
+	min-width: 12rem;
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+}
+
+.ptg-path-row .ptg-value {
+	color: var(--text-muted);
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+}
+
+/* Break marker warning */
+
+.ptg-break-headline {
+	margin-bottom: 0.3em;
+	font-weight: var(--font-medium);
+}
+
+.ptg-break-details summary {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	cursor: pointer;
+}
+
+.ptg-break-preview {
+	max-height: 12rem;
+	margin-top: 0.4em;
+	background-color: var(--background-primary);
+	color: var(--text-muted);
 }
