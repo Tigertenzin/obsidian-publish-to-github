@@ -1,0 +1,77 @@
+.ptg-modal {
+	max-width: 40rem;
+}
+
+.ptg-modal h3 {
+	margin-bottom: 0.25em;
+	padding-bottom: 0.3em;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.ptg-summary {
+	margin-bottom: 1em;
+}
+
+.ptg-summary-row {
+	display: flex;
+	gap: 0.6em;
+	align-items: baseline;
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	word-break: break-all;
+}
+
+.ptg-label {
+	flex: 0 0 5.5rem;
+	color: var(--text-faint);
+}
+
+.ptg-value {
+	color: var(--text-normal);
+}
+
+.ptg-preview {
+	max-height: 24rem;
+	overflow: auto;
+	padding: 0.75em;
+	background-color: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	white-space: pre;
+	font-size: var(--font-ui-smaller);
+}
+
+.ptg-removed-list {
+	margin: 0.4em 0 0;
+	padding-left: 1.4em;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.ptg-empty-state,
+.ptg-hint,
+.ptg-note {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.ptg-warning {
+	margin: 0.6em 0;
+	padding: 0.6em 0.8em;
+	border-radius: var(--radius-s);
+	background-color: var(--background-modifier-error);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+}
+
+.ptg-property-row .setting-item-control input[type="text"] {
+	width: 9rem;
+}
+
+.ptg-list-row .setting-item-control textarea,
+.ptg-textarea-row .setting-item-control textarea {
+	width: 100%;
+	min-width: 16rem;
+	resize: vertical;
+	font-family: var(--font-text);
+}

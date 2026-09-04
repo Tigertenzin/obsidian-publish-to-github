@@ -1,0 +1,20 @@
+{
+  "name": "obsidian-publish-to-github",
+  "version": "0.1.0",
+  "description": "Publish the active Obsidian note to a GitHub repository with transformed frontmatter.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production"
+  },
+  "keywords": [],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "builtin-modules": "^3.3.0",
+    "esbuild": "0.20.2",
+    "obsidian": "latest",
+    "tslib": "2.6.2",
+    "typescript": "5.4.5"
+  }
+}

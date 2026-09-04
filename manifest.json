@@ -1,0 +1,9 @@
+{
+  "id": "publish-to-github",
+  "name": "Publish to GitHub",
+  "version": "0.1.0",
+  "minAppVersion": "1.4.0",
+  "description": "Publish the active note to a GitHub repository, rewriting its frontmatter properties and trimming content after a break marker — without touching the source file.",
+  "author": "",
+  "isDesktopOnly": false
+}
