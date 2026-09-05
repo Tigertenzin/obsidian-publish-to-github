@@ -1,7 +1,7 @@
 {
   "id": "publish-to-github",
   "name": "Publish to GitHub",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "minAppVersion": "1.4.0",
   "description": "Publish the active note to a GitHub repository, rewriting its frontmatter properties and trimming content after a break marker — without touching the source file.",
   "author": "celeryboi",
