@@ -59,13 +59,76 @@
 	word-break: break-word;
 }
 
-/* Date and time fields are the worst offenders and get it spelled out. */
+/*
+ * Date and time fields are the worst offenders and get it spelled out.
+ *
+ * On WebKit — so on iPad and iPhone — the field draws its value as a pill in a
+ * shadow tree, sized to the formatted date ("Sep 3, 2026") and not to the box
+ * around it. None of the rules above can reach inside that tree, so the pill
+ * overflows its card however narrow the input is told to be. Dropping the
+ * native appearance removes the pill entirely and makes the field lay out like
+ * an ordinary text box; the pseudo-element rules that follow constrain the
+ * parts that survive. Tapping still opens the system picker.
+ */
 .ptg-modal input[type="date"],
 .ptg-modal input[type="datetime-local"],
 .ptg-modal input[type="number"] {
 	width: 100%;
 	min-width: 0;
 	max-width: 100%;
+	-webkit-appearance: none;
+	appearance: none;
+	overflow: hidden;
+}
+
+.ptg-modal input[type="date"]::-webkit-date-and-time-value,
+.ptg-modal input[type="datetime-local"]::-webkit-date-and-time-value {
+	width: 100%;
+	min-width: 0;
+	max-width: 100%;
+	margin: 0;
+	text-align: left;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.ptg-modal input[type="date"]::-webkit-datetime-edit,
+.ptg-modal input[type="datetime-local"]::-webkit-datetime-edit {
+	width: 100%;
+	min-width: 0;
+	padding: 0;
+	overflow: hidden;
+}
+
+.ptg-modal input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+.ptg-modal input[type="datetime-local"]::-webkit-datetime-edit-fields-wrapper {
+	min-width: 0;
+	padding: 0;
+}
+
+.ptg-modal input[type="date"]::-webkit-calendar-picker-indicator,
+.ptg-modal input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+	flex: 0 0 auto;
+	margin-left: 0;
+	padding: 0;
+}
+
+/*
+ * Last line of defence. Every wide thing the plugin renders — code, diffs,
+ * nested YAML — carries its own horizontal scroller, so nothing legitimately
+ * needs the dialog itself to scroll sideways. Clipping here means a control
+ * that misbehaves on a platform this was never tested against spoils its own
+ * row rather than the whole window.
+ */
+.ptg-modal {
+	overflow-x: hidden;
+}
+
+.ptg-property,
+.ptg-property-value,
+.ptg-attachment-field {
+	overflow-x: hidden;
 }
 
 .ptg-modal h3 {
