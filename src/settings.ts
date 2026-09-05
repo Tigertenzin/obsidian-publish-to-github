@@ -167,7 +167,10 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 					.onClick(() => window.open("https://github.com/settings/personal-access-tokens/new", "_blank"))
 			);
 
-		const notes = containerEl.createDiv({ cls: "ptg-setup" });
+		// Folded away: true and worth reading once, but not what someone setting
+		// the plugin up for the first time needs in front of them.
+		const notes = containerEl.createEl("details", { cls: "ptg-details" });
+		notes.createEl("summary", { text: "Where the token is kept, and how to disconnect" });
 		notes.createEl("p", {
 			text: "The token is stored in plain text in this plugin's data.json inside your vault, because that is the only place Obsidian gives a plugin to keep settings. Anything that copies your vault — a backup, a sync service, a git repository — copies the token too, which is why it is worth limiting it to the one repository and giving it an expiry.",
 		});

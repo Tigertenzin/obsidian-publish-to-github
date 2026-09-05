@@ -2,6 +2,16 @@
 	max-width: 40rem;
 }
 
+/* Anything wider than the modal scrolls inside its own box, never the modal. */
+.ptg-modal * {
+	max-width: 100%;
+}
+
+.ptg-modal pre {
+	max-width: 100%;
+	overflow-x: auto;
+}
+
 .ptg-modal h3 {
 	margin-bottom: 0.25em;
 	padding-bottom: 0.3em;
@@ -14,12 +24,13 @@
 
 .ptg-summary-row {
 	display: flex;
-	gap: 0.6em;
+	flex-wrap: wrap;
+	gap: 0.3em 0.6em;
 	align-items: center;
 	margin-bottom: 0.3em;
 	font-size: var(--font-ui-small);
 	color: var(--text-muted);
-	word-break: break-all;
+	overflow-wrap: anywhere;
 }
 
 .ptg-label {
@@ -28,6 +39,9 @@
 }
 
 .ptg-value {
+	/* min-width lets a long path shrink instead of widening the modal. */
+	flex: 1 1 0;
+	min-width: 0;
 	color: var(--text-normal);
 }
 
@@ -87,14 +101,16 @@
 
 .ptg-property-head {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
-	gap: 0.5em;
+	gap: 0.4em 0.5em;
 	margin-bottom: 0.45em;
 }
 
 .ptg-key-input {
-	flex: 1 1 auto;
-	min-width: 6rem;
+	flex: 1 1 8rem;
+	min-width: 0;
+	max-width: 100%;
 	font-weight: var(--font-medium);
 }
 
@@ -110,8 +126,11 @@
 }
 
 .ptg-property-value input.ptg-value-input,
-.ptg-property-value textarea.ptg-value-input {
+.ptg-property-value textarea.ptg-value-input,
+.ptg-attachment-field input.ptg-value-input {
 	width: 100%;
+	max-width: 100%;
+	box-sizing: border-box;
 	resize: vertical;
 	font-family: var(--font-text);
 }
@@ -133,8 +152,9 @@
 
 .ptg-removed-row {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
-	gap: 0.6em;
+	gap: 0.2em 0.6em;
 	padding: 0.35em 0.2em;
 	border-bottom: 1px solid var(--background-modifier-border);
 	font-size: var(--font-ui-small);
@@ -146,7 +166,9 @@
 }
 
 .ptg-removed-value {
-	flex: 1 1 auto;
+	/* Without min-width a nowrap flex child refuses to shrink and widens the modal. */
+	flex: 1 1 0;
+	min-width: 0;
 	overflow: hidden;
 	color: var(--text-faint);
 	text-overflow: ellipsis;
@@ -156,7 +178,9 @@
 .ptg-list-row .setting-item-control textarea,
 .ptg-textarea-row .setting-item-control textarea {
 	width: 100%;
-	min-width: 16rem;
+	min-width: 0;
+	max-width: 100%;
+	box-sizing: border-box;
 	resize: vertical;
 	font-family: var(--font-text);
 }
@@ -252,8 +276,9 @@
 /* Filename field and resolved path */
 
 .ptg-filename-input {
-	flex: 1 1 auto;
-	min-width: 12rem;
+	flex: 1 1 12rem;
+	min-width: 0;
+	max-width: 100%;
 	font-family: var(--font-monospace);
 	font-size: var(--font-ui-smaller);
 }
@@ -287,7 +312,8 @@
 /* Attachments */
 
 .ptg-attachment-source {
-	flex: 1 1 auto;
+	flex: 1 1 0;
+	min-width: 0;
 	overflow: hidden;
 	color: var(--text-normal);
 	font-size: var(--font-ui-smaller);
@@ -305,8 +331,9 @@
 
 .ptg-attachment-field {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
-	gap: 0.5em;
+	gap: 0.25em 0.5em;
 	margin-top: 0.35em;
 }
 
@@ -316,6 +343,7 @@
 
 .ptg-attachment-url {
 	margin-top: 0.4em;
+	min-width: 0;
 	overflow: hidden;
 	color: var(--text-faint);
 	font-size: var(--font-ui-smaller);
@@ -387,32 +415,89 @@
 
 .ptg-remove-input {
 	width: 100%;
-	min-width: 12rem;
+	min-width: 0;
+	max-width: 100%;
+	box-sizing: border-box;
 }
 
 /* Setup guidance */
 
+/*
+ * A bordered card rather than loose paragraphs: it pulls the text in from the
+ * pane edge so it no longer starts left of the section headings, and groups the
+ * three steps as one thing to read instead of a wall.
+ */
 .ptg-setup {
-	margin: 0.4em 0 0.8em;
+	margin: 0.2em 0 1em;
+	padding: 0.9em 1.1em;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background-color: var(--background-secondary);
 	color: var(--text-muted);
 	font-size: var(--font-ui-small);
-	line-height: 1.5;
+	line-height: 1.55;
 }
 
 .ptg-setup p {
-	margin: 0 0 0.6em;
+	margin: 0;
 }
 
 .ptg-setup-steps {
-	margin: 0.4em 0;
-	padding-left: 1.4em;
+	margin: 0.8em 0 0;
+	padding-left: 1.3em;
 }
 
 .ptg-setup-steps li {
-	margin-bottom: 0.45em;
+	margin-bottom: 0.5em;
+	padding-left: 0.2em;
+}
+
+.ptg-setup-steps li:last-child {
+	margin-bottom: 0;
 }
 
 .ptg-setup strong {
 	color: var(--text-normal);
 	font-weight: var(--font-medium);
+}
+
+/* Detail that is worth reading once but should not crowd the setup steps. */
+.ptg-details {
+	margin: 0 0 1em;
+	padding: 0.7em 1.1em;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	font-size: var(--font-ui-small);
+}
+
+.ptg-details summary {
+	color: var(--text-normal);
+	font-weight: var(--font-medium);
+	cursor: pointer;
+}
+
+.ptg-details p {
+	margin: 0.7em 0 0;
+	color: var(--text-muted);
+	line-height: 1.55;
+}
+
+
+/*
+ * Narrow panes: give the label a whole line so the field wraps beneath it.
+ * Done by widening the label rather than switching the row to a column, because
+ * in a column container a flex-basis becomes a height and turns a one-line text
+ * field into a tall box.
+ */
+@media (max-width: 600px) {
+	.ptg-summary-row > .ptg-label,
+	.ptg-attachment-field > .ptg-label {
+		flex: 0 0 100%;
+	}
+
+	.ptg-setup,
+	.ptg-details {
+		padding-left: 0.8em;
+		padding-right: 0.8em;
+	}
 }
