@@ -12,6 +12,62 @@
 	overflow-x: auto;
 }
 
+/*
+ * Form controls carry an intrinsic minimum width from the browser's own
+ * stylesheet — date and datetime fields especially, which size themselves to
+ * the date format they render. A min-width beats a max-width in the cascade, so
+ * capping the width above is not enough on its own; it has to be zeroed here.
+ */
+.ptg-modal input,
+.ptg-modal select,
+.ptg-modal textarea,
+.ptg-property-row input,
+.ptg-property-row select {
+	min-width: 0;
+	max-width: 100%;
+	box-sizing: border-box;
+}
+
+.ptg-property-value input,
+.ptg-property-value textarea,
+.ptg-attachment-field input {
+	width: 100%;
+}
+
+/*
+ * Prose blocks: an unbroken string longer than the pane — a URL, a wikilink, a
+ * pasted path — has no break opportunity, so the block's minimum content width
+ * grows and drags the whole pane with it. "anywhere" lets it break mid-string,
+ * which is the only thing that keeps the container honest.
+ */
+.ptg-setup,
+.ptg-setup p,
+.ptg-setup-steps li,
+.ptg-details,
+.ptg-details p,
+.ptg-hint,
+.ptg-note,
+.ptg-warning,
+.ptg-empty-state,
+.ptg-destination,
+.ptg-break-headline,
+.ptg-chip,
+.ptg-suggest-item,
+.ptg-modal li,
+.ptg-modal p {
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+/* Date and time fields are the worst offenders and get it spelled out. */
+.ptg-modal input[type="date"],
+.ptg-modal input[type="datetime-local"],
+.ptg-modal input[type="number"] {
+	width: 100%;
+	min-width: 0;
+	max-width: 100%;
+}
+
 .ptg-modal h3 {
 	margin-bottom: 0.25em;
 	padding-bottom: 0.3em;
@@ -79,7 +135,25 @@
 	font-size: var(--font-ui-small);
 }
 
+/*
+ * Obsidian lays a settings row out as a flex pair, and its control side grows
+ * without a min-width — so several fields in one row push the whole settings
+ * pane wider rather than wrapping. These rows carry three, so they say plainly
+ * that they may wrap and that every field may shrink.
+ */
+.ptg-property-row,
+.ptg-property-row .setting-item-control {
+	flex-wrap: wrap;
+	min-width: 0;
+}
+
+.ptg-property-row .setting-item-control > * {
+	min-width: 0;
+	max-width: 100%;
+}
+
 .ptg-property-row .setting-item-control input[type="text"] {
+	flex: 1 1 9rem;
 	width: 9rem;
 }
 
