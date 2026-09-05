@@ -389,3 +389,30 @@
 	width: 100%;
 	min-width: 12rem;
 }
+
+/* Setup guidance */
+
+.ptg-setup {
+	margin: 0.4em 0 0.8em;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	line-height: 1.5;
+}
+
+.ptg-setup p {
+	margin: 0 0 0.6em;
+}
+
+.ptg-setup-steps {
+	margin: 0.4em 0;
+	padding-left: 1.4em;
+}
+
+.ptg-setup-steps li {
+	margin-bottom: 0.45em;
+}
+
+.ptg-setup strong {
+	color: var(--text-normal);
+	font-weight: var(--font-medium);
+}

@@ -152,6 +152,27 @@ overwriting the newer version, and the plugin tells you to publish again.
 
 `Test` checks that the token can reach both the repository and the branch.
 
+### How connecting to GitHub works
+
+There is no "sign in with GitHub" step, and no account gets connected. The whole arrangement is:
+
+1. **You create a key on GitHub** — a fine-grained personal access token. It is a long string that
+   works like a password with one narrow job, and you choose exactly what it opens: one
+   repository, files only.
+2. **You paste it into the settings.**
+3. **The plugin keeps it in your vault**, in `data.json` next to the plugin.
+4. **Every time it publishes, the plugin shows that key to GitHub.** GitHub sees a valid key for
+   that one repository and allows the write. That is the authorization, and it happens on every
+   request rather than once at setup.
+
+So GitHub never tells the plugin your password, and never tells it who you are — it does not know
+your username unless you type it in. The plugin can do exactly what the key permits and nothing
+else. Revoke the key on GitHub and the plugin stops working immediately; there is nothing to
+disconnect.
+
+The tradeoff of having no login handshake is that the key simply sits in a file in your vault,
+which is why its scope is the thing that matters.
+
 ### About the token
 
 Create a **fine-grained** personal access token, not a classic one. Under *Repository access*

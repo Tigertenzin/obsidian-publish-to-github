@@ -92,6 +92,7 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 		this.index = buildVaultIndex(this.app);
 		this.folders = null;
 
+		this.renderSetup(containerEl);
 		this.renderConnection(containerEl);
 		this.renderPropertiesToAdd(containerEl);
 		this.renderPropertiesToRemove(containerEl);
@@ -129,6 +130,59 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 
 	private async save() {
 		await this.plugin.saveSettings();
+	}
+
+	/**
+	 * There is no sign-in handshake here — the whole connection is a key the user
+	 * creates on GitHub and pastes in. Saying so plainly, in the place where they
+	 * are about to do it, is worth more than any amount of documentation.
+	 */
+	private renderSetup(containerEl: HTMLElement) {
+		new Setting(containerEl).setName("Setting up").setHeading();
+
+		const intro = containerEl.createDiv({ cls: "ptg-setup" });
+		intro.createEl("p", {
+			text: "There is no “sign in with GitHub” step. Instead you create a key on GitHub that opens one repository, and paste it in below. The plugin shows that key to GitHub each time it publishes; that is the whole connection.",
+		});
+
+		const steps = intro.createEl("ol", { cls: "ptg-setup-steps" });
+
+		const create = steps.createEl("li");
+		create.createSpan({ text: "On GitHub, create a " });
+		create.createEl("strong", { text: "fine-grained personal access token" });
+		create.createSpan({
+			text: ". Give it an expiry date. Under Repository access choose Only select repositories and pick your site's repository. Under Permissions set Contents to Read and write — that is all this plugin needs.",
+		});
+
+		steps.createEl("li", { text: "Paste the token into the field below, and fill in the repository owner and name." });
+		steps.createEl("li", { text: "Press Test. It checks the token can reach both the repository and the branch." });
+
+		new Setting(containerEl)
+			.setName("Create a token on GitHub")
+			.setDesc("Opens GitHub's fine-grained token page in your browser.")
+			.addButton((button) =>
+				button
+					.setButtonText("Open GitHub")
+					.setCta()
+					.onClick(() => window.open("https://github.com/settings/personal-access-tokens/new", "_blank"))
+			);
+
+		const notes = containerEl.createDiv({ cls: "ptg-setup" });
+		notes.createEl("p", {
+			text: "The token is stored in plain text in this plugin's data.json inside your vault, because that is the only place Obsidian gives a plugin to keep settings. Anything that copies your vault — a backup, a sync service, a git repository — copies the token too, which is why it is worth limiting it to the one repository and giving it an expiry.",
+		});
+		notes.createEl("p", {
+			text: "You can revoke the token on GitHub at any time and the plugin stops working immediately; there is nothing to disconnect here. The token is only ever sent to api.github.com, is never written into a note or a commit, and is kept out of any error message the plugin shows you.",
+		});
+
+		new Setting(containerEl)
+			.setName("Manage or revoke your tokens")
+			.setDesc("Opens the list of tokens on your GitHub account.")
+			.addButton((button) =>
+				button
+					.setButtonText("Open GitHub")
+					.onClick(() => window.open("https://github.com/settings/tokens?type=beta", "_blank"))
+			);
 	}
 
 	private renderConnection(containerEl: HTMLElement) {
