@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting, Notice } from "obsidian";
+import { App, Notice, PluginSettingTab, SecretComponent, Setting } from "obsidian";
 import type { ImageSizeStyle } from "./attachments";
 import type { HighlightStyle, NoteLinkStyle } from "./syntax";
 import type PublishToGithubPlugin from "./main";
@@ -32,7 +32,11 @@ export interface PublishToGithubSettings {
 	owner: string;
 	repo: string;
 	branch: string;
-	token: string;
+	/**
+	 * Name of the secret in Obsidian's secret storage that holds the access token.
+	 * The token itself is never written to the plugin's data.
+	 */
+	tokenSecret: string;
 	targetFolder: string;
 	/** The filename a note is first offered under, with {{placeholders}}. */
 	fileNameTemplate: string;
@@ -71,7 +75,7 @@ export const DEFAULT_SETTINGS: PublishToGithubSettings = {
 	owner: "",
 	repo: "",
 	branch: "main",
-	token: "",
+	tokenSecret: "",
 	targetFolder: "",
 	fileNameTemplate: "{{slug}}.md",
 	preserveFolderStructure: false,
@@ -190,7 +194,9 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 			text: ". Give it an expiry date. Under Repository access choose Only select repositories and pick your site's repository. Under Permissions set Contents to Read and write — that is all this plugin needs.",
 		});
 
-		steps.createEl("li", { text: "Paste the token into the field below, and fill in the repository owner and name." });
+		steps.createEl("li", {
+			text: "Under Personal access token below, create a secret, paste the token into it, and fill in the repository owner and name.",
+		});
 		steps.createEl("li", { text: "Press Test. It checks the token can reach both the repository and the branch." });
 
 		new Setting(containerEl)
@@ -208,7 +214,7 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 		const notes = containerEl.createEl("details", { cls: "ptg-details" });
 		notes.createEl("summary", { text: "Where the token is kept, and how to disconnect" });
 		notes.createEl("p", {
-			text: "The token is stored in plain text in this plugin's data.json inside your vault, because that is the only place Obsidian gives a plugin to keep settings. Anything that copies your vault — a backup, a sync service, a git repository — copies the token too, which is why it is worth limiting it to the one repository and giving it an expiry.",
+			text: "The token is kept in Obsidian's secret storage, which belongs to this device rather than to your vault: the plugin's settings only record the secret's name. A backup, a sync service or a git repository that copies your vault does not copy the token — which also means that on each other device you publish from, you set the token once in these settings.",
 		});
 		notes.createEl("p", {
 			text: "You can revoke the token on GitHub at any time and the plugin stops working immediately; there is nothing to disconnect here. The token is only ever sent to api.github.com, is never written into a note or a commit, and is kept out of any error message the plugin shows you.",
@@ -274,19 +280,16 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Personal access token")
 			.setDesc(
-				"A fine-grained token limited to this one repository, with Contents: read and write — nothing else is needed. It is stored in plain text in this plugin's data.json, so anything that copies your vault (a backup, a sync service, a git repository) carries the token with it."
+				"A fine-grained token limited to this one repository, with Contents: read and write — nothing else is needed. Choose or create the secret that holds it; the token is kept in Obsidian's secret storage on this device, never in your vault."
 			)
-			.addText((text) => {
-				text.inputEl.type = "password";
-				text.setPlaceholder("github_pat_…")
-					.setValue(this.plugin.settings.token)
-					.onChange(async (value) => {
-						this.plugin.settings.token = value.trim();
-						// The folder list belongs to the old connection.
-						this.folders = null;
-						await this.save();
-					});
-			});
+			.addComponent((el) =>
+				new SecretComponent(this.app, el).setValue(this.plugin.settings.tokenSecret).onChange(async (value) => {
+					this.plugin.settings.tokenSecret = value;
+					// The folder list belongs to the old connection.
+					this.folders = null;
+					await this.save();
+				})
+			);
 
 		new Setting(containerEl)
 			.setName("Target folder")

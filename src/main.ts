@@ -40,7 +40,10 @@ export default class PublishToGithubPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
-		this.client = new GithubClient(() => this.settings);
+		this.client = new GithubClient(
+			() => this.settings,
+			() => this.accessToken()
+		);
 
 		this.addCommand({
 			id: "publish-to-github",
@@ -91,6 +94,8 @@ export default class PublishToGithubPlugin extends Plugin {
 			this.settings.fileNameTemplate = "{{title}}.md";
 		}
 
+		await this.migrateToken();
+
 		// Older versions stored the removal list as one newline-joined string.
 		const removals = this.settings.propertiesToRemove as unknown;
 		if (typeof removals === "string") {
@@ -99,6 +104,55 @@ export default class PublishToGithubPlugin extends Plugin {
 				.map((line) => line.trim())
 				.filter((line) => line.length > 0);
 		}
+	}
+
+	/**
+	 * The token from secret storage — or, if moving it there failed, the copy still
+	 * in data.json, so publishing keeps working until the move succeeds.
+	 */
+	private accessToken(): string | null {
+		const secret = this.settings.tokenSecret ? this.app.secretStorage.getSecret(this.settings.tokenSecret) : null;
+		if (secret) return secret;
+		const legacy = (this.settings as { token?: unknown }).token;
+		return typeof legacy === "string" && legacy.trim().length > 0 ? legacy.trim() : null;
+	}
+
+	/**
+	 * Earlier versions kept the token itself in data.json. Move it into Obsidian's
+	 * secret storage and keep only the secret's name. The plaintext copy is dropped
+	 * only once the secret is confirmed to read back; if anything goes wrong it
+	 * stays where it was, and is tried again on the next load.
+	 */
+	private async migrateToken(): Promise<void> {
+		const settings = this.settings as PublishToGithubSettings & { token?: unknown };
+		const token = typeof settings.token === "string" ? settings.token.trim() : "";
+		if (token.length === 0) {
+			delete settings.token;
+			return;
+		}
+
+		const storage = this.app.secretStorage;
+		try {
+			// Reuse a secret already holding this token, or take a name nothing else has.
+			let id = settings.tokenSecret || TOKEN_SECRET_ID;
+			for (let n = 2; storage.getSecret(id) !== null && storage.getSecret(id) !== token; n++) {
+				id = `${TOKEN_SECRET_ID}-${n}`;
+			}
+
+			storage.setSecret(id, token);
+			if (storage.getSecret(id) !== token) return;
+
+			settings.tokenSecret = id;
+			delete settings.token;
+			await this.saveSettings();
+		} catch {
+			return;
+		}
+
+		new Notice(
+			"Publish to GitHub moved your access token out of data.json into Obsidian's secret storage. Secrets are kept per device: on any other device you publish from, set the token once in the plugin settings.",
+			15000
+		);
 	}
 
 	async saveSettings() {
@@ -466,6 +520,9 @@ export default class PublishToGithubPlugin extends Plugin {
 		return `${summary}\n\n${lines.join("\n")}`;
 	}
 }
+
+/** The secret the access token is moved into from data.json. */
+const TOKEN_SECRET_ID = "publish-to-github-token";
 
 /** Joins a repository folder and a filename, tolerating stray slashes. */
 function joinPath(folder: string, name: string): string {

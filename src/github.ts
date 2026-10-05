@@ -56,10 +56,18 @@ export interface CommitResult {
 const MAX_COMMIT_ATTEMPTS = 3;
 
 export class GithubClient {
-	constructor(private readonly getSettings: () => PublishToGithubSettings) {}
+	constructor(
+		private readonly getSettings: () => PublishToGithubSettings,
+		/** The token itself, read from Obsidian's secret storage; null when it is not set. */
+		private readonly getToken: () => string | null
+	) {}
 
 	private get settings(): PublishToGithubSettings {
 		return this.getSettings();
+	}
+
+	private get token(): string {
+		return this.getToken() ?? "";
 	}
 
 	/** The `/repos/owner/name` prefix, with both parts escaped. */
@@ -74,10 +82,16 @@ export class GithubClient {
 		if (!this.settings.owner) missing.push("repository owner");
 		if (!this.settings.repo) missing.push("repository name");
 		if (!this.settings.branch) missing.push("branch");
-		if (!this.settings.token) missing.push("access token");
+		if (!this.settings.tokenSecret && !this.token) missing.push("access token");
 
 		if (missing.length > 0) {
 			throw new Error(`Missing ${missing.join(", ")} in the plugin settings.`);
+		}
+		// Secrets are kept per device, so one chosen elsewhere may not exist here yet.
+		if (!this.token) {
+			throw new Error(
+				`The secret "${this.settings.tokenSecret}" holding the access token is not set on this device. Set it under Personal access token in the plugin settings.`
+			);
 		}
 	}
 
@@ -309,7 +323,7 @@ export class GithubClient {
 			url: `${API_ROOT}${endpoint}`,
 			method,
 			headers: {
-				Authorization: `Bearer ${this.settings.token}`,
+				Authorization: `Bearer ${this.token}`,
 				Accept: "application/vnd.github+json",
 				"X-GitHub-Api-Version": "2022-11-28",
 				"Content-Type": "application/json",
@@ -325,7 +339,7 @@ export class GithubClient {
 	 * message is the one place plugin text becomes visible and copy-pasteable.
 	 */
 	private redact(text: string): string {
-		const { token } = this.settings;
+		const { token } = this;
 		// Far shorter than any real token is a typo, and redacting it would only
 		// shred ordinary words in the message.
 		return token.length >= 8 ? text.split(token).join("[token]") : text;

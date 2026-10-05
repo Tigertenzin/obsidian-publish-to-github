@@ -198,7 +198,7 @@ so the diff you see is against the newer version before you publish over it.
 | --- | --- |
 | Repository owner / name | The target repository. |
 | Branch | Branch the commit lands on. Must already exist. |
-| Personal access token | A fine-grained token limited to the one repository, with **Contents: read and write**. See below. |
+| Personal access token | The secret, in Obsidian's secret storage, that holds a fine-grained token limited to the one repository, with **Contents: read and write**. See below. |
 | Target folder | Folder inside the repository to publish into — the site's posts folder. Focus the field to browse the folders that exist on the branch. Empty means the repository root. |
 | Default filename | The filename a note is first offered under, with placeholders (see below). `{{slug}}.md` on a new install; an install upgraded from an earlier version keeps `{{title}}.md`, the note's own name, so existing posts are not republished under a new name. |
 | Mirror vault folder structure | Append the note's folder path inside the vault to the target folder. |
@@ -224,8 +224,9 @@ There is no "sign in with GitHub" step, and no account gets connected. The whole
 1. **You create a key on GitHub** — a fine-grained personal access token. It is a long string that
    works like a password with one narrow job, and you choose exactly what it opens: one
    repository, files only.
-2. **You paste it into the settings.**
-3. **The plugin keeps it in your vault**, in `data.json` next to the plugin.
+2. **You paste it into the settings**, as a secret in Obsidian's secret storage.
+3. **Obsidian keeps it on this device**, outside your vault; the plugin's settings record only
+   the secret's name.
 4. **Every time it publishes, the plugin shows that key to GitHub.** GitHub sees a valid key for
    that one repository and allows the write. That is the authorization, and it happens on every
    request rather than once at setup.
@@ -235,8 +236,8 @@ your username unless you type it in. The plugin can do exactly what the key perm
 else. Revoke the key on GitHub and the plugin stops working immediately; there is nothing to
 disconnect.
 
-The tradeoff of having no login handshake is that the key simply sits in a file in your vault,
-which is why its scope is the thing that matters.
+The tradeoff of having no login handshake is that the key simply sits on your device, which is
+why its scope is the thing that matters.
 
 ### About the token
 
@@ -251,13 +252,20 @@ A classic token with the `repo` scope also works and is the wrong choice — it 
 control of every repository you can reach, including private ones the plugin has no business
 touching.
 
-**Where the token lives.** Obsidian gives plugins one place to persist settings, so the token
-is stored in plain text in `data.json` inside the plugin's folder in your vault. That is the
-same as every other Obsidian plugin that talks to a service, and it has a consequence worth
-being deliberate about: anything that copies your vault copies the token. That includes backups,
-file-sync services, and Obsidian Sync when it is set to sync plugin settings. If any of those
-apply, scope the token to the one repository and give it an expiry, so a copy that escapes is
-worth as little as possible.
+**Where the token lives.** In Obsidian's secret storage (Obsidian 1.11.4 and later), which
+belongs to the device rather than the vault. The plugin's `data.json` records only the
+secret's name, so backups, file-sync services, git, and Obsidian Sync copy the name and never the
+token. The flip side: on each device you publish from, set the token once in the plugin's
+settings — another device's secret does not travel with the vault. Scoping the token to the one
+repository and giving it an expiry is still worth doing, so a token that does escape is worth
+as little as possible.
+
+**Upgrading from an earlier version.** Earlier versions kept the token in plain text in
+`data.json`. On first load, the plugin moves it into secret storage under the name
+`publish-to-github-token`, checks that it reads back, and only then removes it from
+`data.json`, with a notice saying so. If the move cannot be made, the token stays where it was
+and keeps working, and the move is tried again on the next load. On another device that syncs
+the vault, set the token once in settings after the upgrade.
 
 **What the plugin does with it.** The token is sent as an `Authorization` header to
 `https://api.github.com`, which is a hardcoded constant — no setting can redirect it elsewhere.
@@ -338,6 +346,8 @@ npm run dev     # rebuild on change
 ```
 
 ## Installing into a vault
+
+Requires Obsidian 1.11.4 or later, for its secret storage.
 
 Through [BRAT](https://github.com/TfTHacker/obsidian42-brat): add `Tigertenzin/obsidian-publish-to-github`
 as a beta plugin and it installs the latest release and keeps it updated.
