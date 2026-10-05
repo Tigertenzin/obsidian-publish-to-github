@@ -346,7 +346,15 @@ comment syntax and stays invisible in reading view.
 npm install
 npm run build   # type-check, then bundle to main.js
 npm run dev     # rebuild on change
+npm test        # run the unit tests
 ```
+
+The tests in `test/` cover the plugin's own logic — frontmatter and break parsing, attachment
+naming and rendering, syntax conversion, placeholders, the diff, and the single-commit publish
+against an in-memory fake of GitHub's API. Obsidian's API exists only inside the app, so
+`test/obsidian.ts` stands in for the few parts of it those modules use. CI runs the type check,
+the tests and the build on every push and pull request, and a release is not published unless
+all three pass.
 
 ## Installing into a vault
 

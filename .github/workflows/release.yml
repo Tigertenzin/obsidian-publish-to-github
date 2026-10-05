@@ -35,8 +35,11 @@ jobs:
 
       - run: npm ci
 
-      # Type-checks as well as bundles, so a broken release cannot be published.
+      # Type-checks as well as bundles, and runs the tests, so a broken release
+      # cannot be published.
       - run: npm run build
+
+      - run: npm test
 
       - name: Publish the release
         env:
