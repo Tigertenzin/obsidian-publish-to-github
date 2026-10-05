@@ -320,13 +320,10 @@ function countLines(lines: string[]): number {
 /**
  * Builds the markdown that gets published. The property list is the complete set of
  * frontmatter for the published copy — anything the user removed in the review window
- * is simply absent from it — followed by the body up to the break marker.
+ * is simply absent from it — followed by the body, which the caller has already cut
+ * at the break marker and rewritten for publishing.
  */
-export function buildOutput(
-	note: ParsedNote,
-	properties: OutgoingProperty[],
-	settings: PublishToGithubSettings
-): string {
+export function buildOutput(body: string, properties: OutgoingProperty[]): string {
 	const frontmatter: Record<string, unknown> = {};
 
 	for (const property of properties) {
@@ -344,7 +341,6 @@ export function buildOutput(
 		frontmatter[key] = property.value;
 	}
 
-	const { body } = applyBreak(note.body, settings);
 	// Blank lines at either end are dropped, so the body always sits exactly one
 	// blank line below the frontmatter. Only whole blank lines go from the start:
 	// leading spaces on the first line of text may be indentation that matters.

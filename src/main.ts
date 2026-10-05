@@ -29,7 +29,6 @@ import {
 	parseNote,
 	postRelativePath,
 	resolveProperties,
-	type ParsedNote,
 } from "./transform";
 
 export default class PublishToGithubPlugin extends Plugin {
@@ -142,7 +141,7 @@ export default class PublishToGithubPlugin extends Plugin {
 			index: buildVaultIndex(this.app),
 		};
 
-		this.openReview(file, note, context);
+		this.openReview(file, context);
 	}
 
 	/** Finds the note's embeds and pairs each with the vault file it points at. */
@@ -268,11 +267,11 @@ export default class PublishToGithubPlugin extends Plugin {
 		return pending.length;
 	}
 
-	private openReview(file: TFile, note: ParsedNote, context: ReviewContext) {
+	private openReview(file: TFile, context: ReviewContext) {
 		// The modal edits context.properties in place, so stepping back from the
 		// preview reopens the review window with the user's edits still there.
 		new ReviewModal(this.app, context, () => {
-			void this.openPreview(file, note, context);
+			void this.openPreview(file, context);
 		}).open();
 	}
 
@@ -294,9 +293,9 @@ export default class PublishToGithubPlugin extends Plugin {
 		return rewriteBody(context.breakResult.body, replacements);
 	}
 
-	private async openPreview(file: TFile, note: ParsedNote, context: ReviewContext) {
+	private async openPreview(file: TFile, context: ReviewContext) {
 		// The break is already applied to the body the embeds were found in.
-		const output = buildOutput({ ...note, body: this.publishedBody(context) }, context.properties, this.settings);
+		const output = buildOutput(this.publishedBody(context), context.properties);
 		const targetPath = context.resolvePath(context.fileName);
 
 		let remote: RemoteFile | null = null;
@@ -327,7 +326,7 @@ export default class PublishToGithubPlugin extends Plugin {
 			postUnchanged,
 			uploads,
 			uploadsError,
-			onBack: () => this.openReview(file, note, context),
+			onBack: () => this.openReview(file, context),
 			// The SHA the diff was built against, so a file that moved on underneath
 			// us is rejected rather than clobbered. Undefined means "look it up".
 			onPublish: () =>
