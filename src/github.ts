@@ -47,6 +47,7 @@ export interface CommitFile {
 }
 
 export interface CommitResult {
+	/** The commit on github.com. */
 	commitUrl: string;
 	/** Paths that did not exist on the branch before this commit. */
 	created: Set<string>;
@@ -270,10 +271,21 @@ export class GithubClient {
 			this.assertOk(update, "update the branch");
 
 			return {
-				commitUrl: String(commitResponse.json?.html_url ?? ""),
+				commitUrl: String(commitResponse.json?.html_url || this.webUrl(`commit/${commitSha}`)),
 				created,
 			};
 		}
+	}
+
+	/** A page of the repository on github.com, as in webUrl("commit/<sha>"). */
+	webUrl(page: string): string {
+		const { owner, repo } = this.settings;
+		return `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${page}`;
+	}
+
+	/** A file as it stands on the branch, on github.com. */
+	fileUrl(path: string): string {
+		return this.webUrl(`blob/${encodePath(this.settings.branch)}/${encodePath(path)}`);
 	}
 
 	/**

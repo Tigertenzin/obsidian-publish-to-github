@@ -638,3 +638,11 @@
 		padding-right: 0.8em;
 	}
 }
+
+/* Links under a publish notice: one row, spaced apart. */
+.ptg-notice-links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-3);
+	margin-top: var(--size-4-1);
+}

@@ -448,11 +448,16 @@ export default class PublishToGithubPlugin extends Plugin {
 
 			const count = attachments.length;
 			const withAttachments = count > 0 ? ` with ${count} attachment${count === 1 ? "" : "s"}` : "";
+			const summary = options.postUnchanged
+				? `Uploaded ${count} attachment${count === 1 ? "" : "s"}. ${targetPath} was already up to date, so it was left as is.`
+				: `${result.created.has(targetPath) ? "Created" : "Updated"} ${targetPath}${withAttachments} on ${this.settings.branch}.`;
 			new Notice(
-				options.postUnchanged
-					? `Uploaded ${count} attachment${count === 1 ? "" : "s"}. ${targetPath} was already up to date, so it was left as is.`
-					: `${result.created.has(targetPath) ? "Created" : "Updated"} ${targetPath}${withAttachments} on ${this.settings.branch}.`,
-				6000
+				withLinks(summary, [
+					{ text: "View commit", url: result.commitUrl },
+					{ text: "View post", url: this.client.fileUrl(targetPath) },
+				]),
+				// Long enough to reach for a link; a click anywhere else dismisses it.
+				15000
 			);
 		} catch (error) {
 			// Whatever is at the path may have moved on; going Back must read it afresh
@@ -519,6 +524,17 @@ export default class PublishToGithubPlugin extends Plugin {
 		];
 		return `${summary}\n\n${lines.join("\n")}`;
 	}
+}
+
+/** A notice's text followed by links, each opening in the browser. */
+function withLinks(text: string, links: Array<{ text: string; url: string }>): DocumentFragment {
+	const fragment = createFragment();
+	fragment.createDiv({ text });
+	const row = fragment.createDiv({ cls: "ptg-notice-links" });
+	for (const link of links) {
+		row.createEl("a", { text: link.text, href: link.url });
+	}
+	return fragment;
 }
 
 /** The secret the access token is moved into from data.json. */

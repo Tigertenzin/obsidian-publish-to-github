@@ -167,6 +167,9 @@ Everything stays a plain text field — a suggestion is a shortcut, never a rest
 folder or property that does not exist yet can still be typed in. Matches on a prefix are
 listed before matches anywhere in the name, and arrow keys plus Enter pick one.
 
+When the publish succeeds, the notice that says so links to the commit and to the post on
+GitHub, and stays up long enough to click either.
+
 ## Republishing over an existing post
 
 When a file already exists at the target path — the usual case for a post being revised —
