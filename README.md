@@ -111,6 +111,12 @@ publishing an `<img src="…" alt="…" width="450">` tag, which any markdown re
 through; set *Image sizes* to `Drop` for plain `![alt](url)` markdown instead. Embeds with no
 size are always plain markdown.
 
+**Video, audio and PDFs.** Markdown image syntax only shows images, so other embeds are
+written in the form that works for them: video as `<video src="…" controls>` (keeping its
+width under the same setting as images), audio as `<audio src="…" controls>`, and a PDF as a
+plain link, `[report.pdf](…)`. The review window's alt text field becomes the player's
+screen-reader label, or the PDF's link text.
+
 **What is left alone.** Links to the web, paths already rooted at the site (`/posts/…`), note
 transclusions and non-media embeds like `![[Some Note#Heading]]` or `.base` files, and
 anything inside a fenced or inline code block.

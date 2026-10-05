@@ -1,10 +1,14 @@
+/** What an embedded file is, which decides how its published embed is written. */
+export type MediaKind = "image" | "video" | "audio" | "document";
+
 /** File types Obsidian embeds as media, and that are worth uploading. */
-const MEDIA_EXTENSIONS = new Set([
-	"png", "jpg", "jpeg", "gif", "webp", "avif", "bmp", "svg", "ico",
-	"mp4", "webm", "mov", "ogv",
-	"mp3", "wav", "ogg", "m4a", "flac",
-	"pdf",
-]);
+const MEDIA_KINDS: Record<string, MediaKind> = {
+	png: "image", jpg: "image", jpeg: "image", gif: "image", webp: "image",
+	avif: "image", bmp: "image", svg: "image", ico: "image",
+	mp4: "video", webm: "video", mov: "video", ogv: "video",
+	mp3: "audio", wav: "audio", ogg: "audio", m4a: "audio", flac: "audio",
+	pdf: "document",
+};
 
 /** How a size suffix on an embed is carried into the published markdown. */
 export type ImageSizeStyle = "html" | "drop";
@@ -80,8 +84,13 @@ export function findEmbeds(body: string): Embed[] {
 }
 
 export function isMedia(linkpath: string): boolean {
-	const match = linkpath.toLowerCase().match(/\.([a-z0-9]+)$/);
-	return match ? MEDIA_EXTENSIONS.has(match[1]) : false;
+	return mediaKind(linkpath) !== null;
+}
+
+/** The kind of media a path names, by its extension, or null when it is not media. */
+export function mediaKind(path: string): MediaKind | null {
+	const match = path.toLowerCase().match(/\.([a-z0-9]+)$/);
+	return match ? MEDIA_KINDS[match[1]] ?? null : null;
 }
 
 function isExternal(target: string): boolean {
@@ -202,12 +211,33 @@ export function attachmentUrl(prefix: string, fileName: string): string {
 	return `${base}/${fileName.replace(/^\/+/, "")}`;
 }
 
-/** Renders an embed for the published copy, keeping its size when asked to. */
+/**
+ * Renders an embed for the published copy, in the form its kind needs: markdown
+ * image syntax only shows images, so video and audio become HTML players and a
+ * PDF becomes a link. `alt` is the image's alt text, a player's accessible
+ * label, or a PDF's link text. A size is kept when asked to.
+ */
 export function renderEmbed(alt: string, url: string, width: number | null, style: ImageSizeStyle): string {
-	if (width !== null && style === "html") {
-		return `<img src="${escapeAttribute(url)}" alt="${escapeAttribute(alt)}" width="${width}">`;
+	const sized = width !== null && style === "html" ? ` width="${width}"` : "";
+	const label = alt.length > 0 ? ` aria-label="${escapeAttribute(alt)}"` : "";
+
+	switch (mediaKind(url)) {
+		case "video":
+			return `<video src="${escapeAttribute(url)}" controls${sized}${label}></video>`;
+		case "audio":
+			return `<audio src="${escapeAttribute(url)}" controls${label}></audio>`;
+		case "document": {
+			const text = alt.length > 0 ? alt : decodeTarget(url.slice(url.lastIndexOf("/") + 1));
+			return `[${escapeLinkText(text)}](${url})`;
+		}
+		default:
+			if (sized) return `<img src="${escapeAttribute(url)}" alt="${escapeAttribute(alt)}"${sized}>`;
+			return `![${escapeLinkText(alt)}](${url})`;
 	}
-	return `![${alt.replace(/([[\]])/g, "\\$1")}](${url})`;
+}
+
+function escapeLinkText(text: string): string {
+	return text.replace(/([[\]])/g, "\\$1");
 }
 
 function escapeAttribute(value: string): string {

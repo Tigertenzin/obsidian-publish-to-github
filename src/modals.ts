@@ -11,7 +11,7 @@ import {
 	ToggleComponent,
 	stringifyYaml,
 } from "obsidian";
-import { attachmentUrl, cleanAttachmentName, type Embed } from "./attachments";
+import { attachmentUrl, cleanAttachmentName, mediaKind, type Embed, type MediaKind } from "./attachments";
 import { diffLines, type DiffLine, type DiffResult } from "./diff";
 import { TextSuggest } from "./suggest";
 import type { VaultIndex } from "./vault";
@@ -30,6 +30,14 @@ import {
 
 /** Above this, an image is worth flagging before it is committed. */
 const LARGE_ATTACHMENT = 5 * 1024 * 1024;
+
+/** What the alt text field means for each kind of embed, since only images have alt text. */
+const ALT_FIELDS: Record<MediaKind, { label: string; placeholder: string }> = {
+	image: { label: "Alt text", placeholder: "describe the image" },
+	video: { label: "Label", placeholder: "optional, read out by screen readers" },
+	audio: { label: "Label", placeholder: "optional, read out by screen readers" },
+	document: { label: "Link text", placeholder: "defaults to the file name" },
+};
 
 const ORIGIN_LABELS: Record<PropertyOrigin, string> = {
 	note: "from note",
@@ -253,12 +261,13 @@ export class ReviewModal extends Modal {
 			});
 	}
 
-	/** Images found in the note, with the name and alt text they publish under. */
+	/** Images and other media found in the note, with the name and alt text they publish under. */
 	private renderAttachments(contentEl: HTMLElement): void {
 		const attachments = this.context.attachments;
 		if (attachments.length === 0) return;
 
-		contentEl.createEl("h3", { text: "Images" });
+		const onlyImages = attachments.every((a) => mediaKind(a.embed.linkpath) === "image");
+		contentEl.createEl("h3", { text: onlyImages ? "Images" : "Attachments" });
 		contentEl.createEl("p", {
 			cls: "ptg-hint",
 			text: "Embeds in the published part of the note. Each is uploaded to the repository and its link rewritten to point there.",
@@ -309,9 +318,10 @@ export class ReviewModal extends Modal {
 			name.inputEl.addClass("ptg-value-input");
 
 			const altRow = row.createDiv({ cls: "ptg-attachment-field" });
-			altRow.createSpan({ cls: "ptg-label", text: "Alt text" });
+			const altField = ALT_FIELDS[mediaKind(attachment.embed.linkpath) ?? "image"];
+			altRow.createSpan({ cls: "ptg-label", text: altField.label });
 			const alt = new TextComponent(altRow)
-				.setPlaceholder("describe the image")
+				.setPlaceholder(altField.placeholder)
 				.setValue(attachment.alt)
 				.onChange((value) => {
 					attachment.alt = value;
@@ -751,10 +761,11 @@ export class PreviewModal extends Modal {
 			),
 		];
 		if (uploading.length === 0) return;
+		const noun = uploading.every((path) => mediaKind(path) === "image") ? "image" : "file";
 
 		const box = contentEl.createDiv({ cls: "ptg-note" });
 		box.createDiv({
-			text: `${uploading.length} image${uploading.length === 1 ? "" : "s"} will be uploaded before the post, each as its own commit:`,
+			text: `${uploading.length} ${noun}${uploading.length === 1 ? "" : "s"} will be uploaded before the post, each as its own commit:`,
 		});
 		const list = box.createEl("ul", { cls: "ptg-removed-list" });
 		for (const path of uploading) {
