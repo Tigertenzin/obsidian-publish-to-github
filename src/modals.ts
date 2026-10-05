@@ -11,7 +11,7 @@ import {
 	ToggleComponent,
 	stringifyYaml,
 } from "obsidian";
-import { attachmentUrl, type Embed } from "./attachments";
+import { attachmentUrl, cleanAttachmentName, type Embed } from "./attachments";
 import { diffLines, type DiffLine, type DiffResult } from "./diff";
 import { TextSuggest } from "./suggest";
 import type { VaultIndex } from "./vault";
@@ -334,13 +334,18 @@ export class ReviewModal extends Modal {
 				head.createSpan({ cls: "ptg-origin", text: "same image as above" });
 			}
 
+			const originalName = attachment.file?.name ?? "";
 			name.setValue(attachment.fileName).onChange((value) => {
+				// The URL shows the cleaned name as it is typed; the field itself is
+				// only tidied on blur, so the cursor is not yanked mid-word.
+				const cleaned = cleanAttachmentName(value, originalName);
 				for (const sibling of siblings) {
-					sibling.attachment.fileName = value.trim();
-					if (sibling.input !== name) sibling.input.setValue(value);
+					sibling.attachment.fileName = cleaned;
+					if (sibling.input !== name) sibling.input.setValue(cleaned);
 					sibling.showUrl();
 				}
 			});
+			name.inputEl.addEventListener("blur", () => name.setValue(attachment.fileName));
 			showUrl();
 		}
 	}
@@ -388,10 +393,22 @@ export class ReviewModal extends Modal {
 		}
 	}
 
-	/** Blocks the step forward on duplicate keys, which would silently drop a property. */
+	/** Blocks the step forward on duplicate property keys or image names, which would silently lose one. */
 	private validate(): string | null {
 		if (normaliseFileName(this.context.fileName).length === 0) {
 			return "Give the file a name before publishing.";
+		}
+
+		// Two different images under one name would share one upload, and one
+		// of them would silently show the other's picture.
+		const imageNames = new Map<string, string>();
+		for (const attachment of this.context.attachments) {
+			if (attachment.file === null || attachment.fileName.length === 0) continue;
+			const other = imageNames.get(attachment.fileName);
+			if (other !== undefined && other !== attachment.file.path) {
+				return `Two different images are both named "${attachment.fileName}". Rename one before continuing.`;
+			}
+			imageNames.set(attachment.fileName, attachment.file.path);
 		}
 
 		const seen = new Set<string>();

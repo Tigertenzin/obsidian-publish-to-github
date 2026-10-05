@@ -89,7 +89,10 @@ two such names still stay apart.
 
 The review window lists every image with its size, the filename it will be uploaded under,
 and an alt text field — a wikilink embed carries no alt text, so this is the place to add it.
-Both are editable, and the resulting URL is shown beneath. An image embedded more than once
+Both are editable, and the resulting URL is shown beneath. A name you type is cleaned the same
+way the automatic ones are — `My Diagram` becomes `my-diagram.png` — keeps the image's own
+extension whatever you type, and cannot include a folder. Clearing the name leaves that embed
+exactly as written. Two different images cannot share a name. An image embedded more than once
 is uploaded once: each embed keeps its own alt text, but they share one name, so renaming one
 renames them all. An embed whose file cannot be found
 in the vault is flagged and left in the note exactly as written rather than being rewritten to

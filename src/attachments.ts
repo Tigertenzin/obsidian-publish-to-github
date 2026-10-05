@@ -137,6 +137,26 @@ export function sanitiseAttachmentName(name: string): string {
 }
 
 /**
+ * Cleans a name typed in the review window the same way the automatic names are
+ * made. Folders are flattened into the name, so an image always lands in its
+ * post's folder, and the original file's extension is kept whatever was typed,
+ * so the upload is never served as the wrong type. Empty stays empty: that means
+ * "leave this embed as written".
+ */
+export function cleanAttachmentName(typed: string, originalName: string): string {
+	const at = originalName.lastIndexOf(".");
+	const extension = at === -1 ? "" : originalName.slice(at).toLowerCase();
+
+	let stem = typed.trim();
+	if (stem.length === 0) return "";
+
+	// Drop a media extension if one was typed; the original's is put back below.
+	// Anything else after a dot, as in "v1.2", is part of the name.
+	if (isMedia(stem)) stem = stem.replace(/\.[a-z0-9]+$/i, "");
+	return `${slugOrHash(stem, "attachment")}${extension}`;
+}
+
+/**
  * The subfolder a post's images are kept in, named after where the post itself
  * is published — so two posts can never share one, and one post's images never
  * overwrite another's. `postPath` is relative to the target folder.
