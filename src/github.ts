@@ -19,6 +19,20 @@ export interface RemoteFile {
 	tooLarge: boolean;
 }
 
+/** The files directly inside a repository folder, by name. */
+export interface FolderListing {
+	/** Git blob SHA of each file, keyed by filename. */
+	shas: Map<string, string>;
+	/**
+	 * False when the folder held more files than GitHub lists in one response, so
+	 * a name missing from `shas` may still exist and has to be looked up directly.
+	 */
+	complete: boolean;
+}
+
+/** The contents API lists at most this many entries of a folder. */
+const FOLDER_LIST_LIMIT = 1000;
+
 export interface PublishResult {
 	/** True when the file did not exist on the branch before this commit. */
 	created: boolean;
@@ -126,6 +140,36 @@ export class GithubClient {
 		}
 
 		return { sha: json.sha, content: fromBase64(json.content), tooLarge: false };
+	}
+
+	/**
+	 * Lists the files directly inside a folder on the branch, with their SHAs, in
+	 * one call and without downloading any of them. A folder that does not exist
+	 * yet lists as empty.
+	 */
+	async listFiles(folder: string): Promise<FolderListing> {
+		this.assertConfigured();
+		const { branch } = this.settings;
+
+		// The root is "/contents" exactly; GitHub rejects "/contents/" with a 400.
+		const endpoint = folder.length > 0 ? `${this.repoRoot}/contents/${encodePath(folder)}` : `${this.repoRoot}/contents`;
+		const response = await this.request("GET", `${endpoint}?ref=${encodeURIComponent(branch)}`);
+
+		if (response.status === 404) return { shas: new Map(), complete: true };
+		this.assertOk(response, `list ${folder || "the repository root"}`);
+
+		const json: unknown = response.json;
+		if (!Array.isArray(json)) {
+			throw new Error(`${folder} exists in the repository but is not a folder.`);
+		}
+
+		const shas = new Map<string, string>();
+		for (const entry of json) {
+			if (entry?.type === "file" && typeof entry.name === "string" && typeof entry.sha === "string") {
+				shas.set(entry.name, entry.sha);
+			}
+		}
+		return { shas, complete: json.length < FOLDER_LIST_LIMIT };
 	}
 
 	/**

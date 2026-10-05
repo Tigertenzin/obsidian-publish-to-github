@@ -7,7 +7,7 @@ import {
 	rewriteBody,
 	sanitiseAttachmentName,
 } from "./attachments";
-import { GithubClient, gitBlobSha, type RemoteFile } from "./github";
+import { GithubClient, gitBlobSha, type FolderListing, type RemoteFile } from "./github";
 import { PreviewModal, ReviewModal, type Attachment, type ReviewContext } from "./modals";
 import {
 	DEFAULT_SETTINGS,
@@ -197,24 +197,41 @@ export default class PublishToGithubPlugin extends Plugin {
 		}
 		if (uploads.size === 0) return;
 
+		// What is already there is read one folder at a time — with images grouped
+		// by post, one call for the whole publish — rather than downloading each
+		// image just to learn its SHA. A failed read stops the publish: treating it
+		// as "nothing there" would only fail later, less clearly, on the upload.
+		const listings = new Map<string, FolderListing>();
+		const remoteSha = async (path: string): Promise<string | null> => {
+			const at = path.lastIndexOf("/");
+			const folder = at === -1 ? "" : path.slice(0, at);
+			const name = path.slice(at + 1);
+
+			let listing = listings.get(folder);
+			if (!listing) {
+				listing = await this.client.listFiles(folder);
+				listings.set(folder, listing);
+			}
+
+			const sha = listing.shas.get(name);
+			if (sha !== undefined) return sha;
+			// Too big a folder to list in full: absent from the list is not proof of absence.
+			return listing.complete ? null : (await this.client.getFile(path))?.sha ?? null;
+		};
+
 		let index = 0;
 		for (const [path, attachment] of uploads) {
 			index++;
 			const bytes = await this.app.vault.readBinary(attachment.file as TFile);
 
-			const existing = await this.client.getFile(path).catch(() => null);
+			const existingSha = await remoteSha(path);
 			const localSha = await gitBlobSha(bytes);
-			if (existing && localSha && existing.sha === localSha) {
+			if (existingSha && localSha && existingSha === localSha) {
 				continue;
 			}
 
 			new Notice(`Uploading attachment ${index} of ${uploads.size}: ${attachment.fileName}`, 3000);
-			await this.client.publishBinary(
-				path,
-				bytes,
-				`Add ${attachment.fileName} for ${postName}`,
-				existing?.sha ?? null
-			);
+			await this.client.publishBinary(path, bytes, `Add ${attachment.fileName} for ${postName}`, existingSha);
 		}
 	}
 

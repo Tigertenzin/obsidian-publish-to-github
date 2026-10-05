@@ -102,7 +102,8 @@ a broken link.
 Images are uploaded **before** the post, so a post never lands referring to an image that
 failed to upload. An image already in the repository byte for byte is skipped rather than
 committed again — the plugin compares the git blob hash of the local file against the one
-GitHub reports. Each upload is its own commit, so publishing a post with two new images makes
+GitHub reports, reading the hashes for a whole folder in one request rather than downloading
+each image. If the repository cannot be checked, nothing is published. Each upload is its own commit, so publishing a post with two new images makes
 three commits.
 
 **Sizes.** `![[image.png|450]]` has no markdown equivalent. By default the size is kept by
