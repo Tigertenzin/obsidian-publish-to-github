@@ -33,12 +33,27 @@ export interface FolderListing {
 /** The contents API lists at most this many entries of a folder. */
 const FOLDER_LIST_LIMIT = 1000;
 
-export interface PublishResult {
-	/** True when the file did not exist on the branch before this commit. */
-	created: boolean;
-	commitUrl: string;
-	fileUrl: string;
+/** One file to commit, and the version of it the user reviewed. */
+export interface CommitFile {
+	/** Full path inside the repository. */
+	path: string;
+	/** Text is committed as UTF-8; bytes as they are. */
+	content: string | ArrayBuffer;
+	/**
+	 * SHA of the file the user reviewed, null when nothing was there, or undefined
+	 * when it could not be checked and is committed regardless.
+	 */
+	expectedSha: string | null | undefined;
 }
+
+export interface CommitResult {
+	commitUrl: string;
+	/** Paths that did not exist on the branch before this commit. */
+	created: Set<string>;
+}
+
+/** How many times a commit is rebuilt when the branch moves on mid-publish. */
+const MAX_COMMIT_ATTEMPTS = 3;
 
 export class GithubClient {
 	constructor(private readonly getSettings: () => PublishToGithubSettings) {}
@@ -116,14 +131,16 @@ export class GithubClient {
 			.sort((a, b) => a.localeCompare(b));
 	}
 
-	/** Reads the file at a path on the branch, or null when nothing is there yet. */
-	async getFile(path: string): Promise<RemoteFile | null> {
+	/**
+	 * Reads the file at a path on the branch — or at `ref`, a commit, when given —
+	 * or null when nothing is there yet.
+	 */
+	async getFile(path: string, ref?: string): Promise<RemoteFile | null> {
 		this.assertConfigured();
-		const { owner, repo, branch } = this.settings;
 
 		const response = await this.request(
 			"GET",
-			`${this.repoRoot}/contents/${encodePath(path)}?ref=${encodeURIComponent(branch)}`
+			`${this.repoRoot}/contents/${encodePath(path)}?ref=${encodeURIComponent(ref ?? this.settings.branch)}`
 		);
 
 		if (response.status === 404) return null;
@@ -143,17 +160,16 @@ export class GithubClient {
 	}
 
 	/**
-	 * Lists the files directly inside a folder on the branch, with their SHAs, in
-	 * one call and without downloading any of them. A folder that does not exist
-	 * yet lists as empty.
+	 * Lists the files directly inside a folder on the branch — or at `ref`, a
+	 * commit, when given — with their SHAs, in one call and without downloading any
+	 * of them. A folder that does not exist yet lists as empty.
 	 */
-	async listFiles(folder: string): Promise<FolderListing> {
+	async listFiles(folder: string, ref?: string): Promise<FolderListing> {
 		this.assertConfigured();
-		const { branch } = this.settings;
 
 		// The root is "/contents" exactly; GitHub rejects "/contents/" with a 400.
 		const endpoint = folder.length > 0 ? `${this.repoRoot}/contents/${encodePath(folder)}` : `${this.repoRoot}/contents`;
-		const response = await this.request("GET", `${endpoint}?ref=${encodeURIComponent(branch)}`);
+		const response = await this.request("GET", `${endpoint}?ref=${encodeURIComponent(ref ?? this.settings.branch)}`);
 
 		if (response.status === 404) return { shas: new Map(), complete: true };
 		this.assertOk(response, `list ${folder || "the repository root"}`);
@@ -173,59 +189,119 @@ export class GithubClient {
 	}
 
 	/**
-	 * Commits the file. Pass `expectedSha` — the SHA the user was shown a diff
-	 * against, or null for "nothing was there" — so GitHub rejects the write if the
-	 * file changed in the meantime instead of silently overwriting newer work.
+	 * Commits every file in one commit, so a post and its attachments land
+	 * together or not at all.
+	 *
+	 * Each file carries the SHA it was reviewed against — null for "nothing was
+	 * there", undefined for "not checked" — and the commit is refused if any of
+	 * them has since changed on the branch, instead of overwriting newer work.
+	 * Commits that touched only other files are no reason to refuse: when the
+	 * branch moves on mid-publish the files are re-checked against its new head
+	 * and the commit rebuilt on top of it, a few times before giving up.
 	 */
-	async publish(
-		path: string,
-		content: string,
+	async commitFiles(
+		files: CommitFile[],
 		message: string,
-		expectedSha?: string | null
-	): Promise<PublishResult> {
-		return this.put(path, toBase64(content), message, expectedSha);
-	}
-
-	/** Commits raw bytes — an image or other attachment read from the vault. */
-	async publishBinary(
-		path: string,
-		bytes: ArrayBuffer,
-		message: string,
-		expectedSha?: string | null
-	): Promise<PublishResult> {
-		return this.put(path, bytesToBase64(new Uint8Array(bytes)), message, expectedSha);
-	}
-
-	private async put(
-		path: string,
-		base64: string,
-		message: string,
-		expectedSha?: string | null
-	): Promise<PublishResult> {
+		onProgress?: (step: string) => void
+	): Promise<CommitResult> {
 		this.assertConfigured();
 		const { owner, repo, branch } = this.settings;
+		const refPath = `${this.repoRoot}/git/refs/heads/${encodePath(branch)}`;
 
-		const sha = expectedSha === undefined ? (await this.getFile(path))?.sha ?? null : expectedSha;
-		const response = await this.request("PUT", `${this.repoRoot}/contents/${encodePath(path)}`, {
-			message,
-			content: base64,
-			branch,
-			...(sha ? { sha } : {}),
-		});
-
-		// Committing with no SHA to a path that is now taken: someone created the
-		// file after it was checked. GitHub reports this as a 422, but it is the same
-		// conflict as a stale SHA and deserves the same explanation.
-		if (response.status === 422 && sha === null && /\bsha\b/i.test(String(response.json?.message ?? ""))) {
-			throw new Error(CONFLICT_MESSAGE);
+		// Blobs are addressed by content, so they are uploaded once, whatever head
+		// the commit ends up on.
+		const blobs: Array<{ path: string; sha: string }> = [];
+		for (const [index, file] of files.entries()) {
+			onProgress?.(`Uploading ${index + 1} of ${files.length}: ${file.path}`);
+			blobs.push({ path: file.path, sha: await this.createBlob(file) });
 		}
-		this.assertOk(response, "publish the file");
 
-		return {
-			created: sha === null,
-			commitUrl: response.json?.commit?.html_url ?? "",
-			fileUrl: response.json?.content?.html_url ?? "",
-		};
+		for (let attempt = 1; ; attempt++) {
+			const refResponse = await this.request("GET", `${this.repoRoot}/git/ref/heads/${encodePath(branch)}`);
+			if (refResponse.status === 404) {
+				throw new Error(`Branch "${branch}" does not exist in ${owner}/${repo}.`);
+			}
+			this.assertOk(refResponse, "read the branch");
+			const head = String(refResponse.json?.object?.sha ?? "");
+
+			const headCommit = await this.request("GET", `${this.repoRoot}/git/commits/${head}`);
+			this.assertOk(headCommit, "read the latest commit");
+			const baseTree = String(headCommit.json?.tree?.sha ?? "");
+
+			const created = await this.checkExpected(files, head);
+
+			const treeResponse = await this.request("POST", `${this.repoRoot}/git/trees`, {
+				base_tree: baseTree,
+				tree: blobs.map((blob) => ({ path: blob.path, mode: "100644", type: "blob", sha: blob.sha })),
+			});
+			this.assertOk(treeResponse, "build the commit");
+
+			const commitResponse = await this.request("POST", `${this.repoRoot}/git/commits`, {
+				message,
+				tree: treeResponse.json?.sha,
+				parents: [head],
+			});
+			this.assertOk(commitResponse, "create the commit");
+			const commitSha = String(commitResponse.json?.sha ?? "");
+
+			const update = await this.request("PATCH", refPath, { sha: commitSha, force: false });
+			// Not a fast-forward: something landed on the branch since it was read.
+			// Other refusals, such as branch protection, are reported as they are.
+			const movedOn =
+				update.status === 422 && /fast[- ]forward/i.test(String(update.json?.message ?? ""));
+			if (movedOn && attempt < MAX_COMMIT_ATTEMPTS) continue;
+			if (movedOn) {
+				throw new Error(`The branch "${branch}" kept changing while publishing. Nothing was committed; try again.`);
+			}
+			this.assertOk(update, "update the branch");
+
+			return {
+				commitUrl: String(commitResponse.json?.html_url ?? ""),
+				created,
+			};
+		}
+	}
+
+	/**
+	 * Confirms each file is still as it was reviewed at `head`, and reports which
+	 * paths are new. Throws the conflict error when any has changed.
+	 */
+	private async checkExpected(files: CommitFile[], head: string): Promise<Set<string>> {
+		const listings = new Map<string, FolderListing>();
+		const created = new Set<string>();
+
+		for (const file of files) {
+			const at = file.path.lastIndexOf("/");
+			const folder = at === -1 ? "" : file.path.slice(0, at);
+			const name = file.path.slice(at + 1);
+
+			let listing = listings.get(folder);
+			if (!listing) {
+				listing = await this.listFiles(folder, head);
+				listings.set(folder, listing);
+			}
+
+			let current = listing.shas.get(name) ?? null;
+			// Too big a folder to list in full: absent from the list is not proof of absence.
+			if (current === null && !listing.complete) current = (await this.getFile(file.path, head))?.sha ?? null;
+
+			if (file.expectedSha !== undefined && current !== file.expectedSha) {
+				throw new Error(CONFLICT_MESSAGE);
+			}
+			if (current === null) created.add(file.path);
+		}
+		return created;
+	}
+
+	private async createBlob(file: CommitFile): Promise<string> {
+		const body =
+			typeof file.content === "string"
+				? { content: file.content, encoding: "utf-8" }
+				: { content: bytesToBase64(new Uint8Array(file.content)), encoding: "base64" };
+
+		const response = await this.request("POST", `${this.repoRoot}/git/blobs`, body);
+		this.assertOk(response, `upload ${file.path}`);
+		return String(response.json?.sha ?? "");
 	}
 
 	private async request(method: string, endpoint: string, body?: unknown): Promise<RequestUrlResponse> {
@@ -250,7 +326,9 @@ export class GithubClient {
 	 */
 	private redact(text: string): string {
 		const { token } = this.settings;
-		return token.length > 0 ? text.split(token).join("[token]") : text;
+		// Far shorter than any real token is a typo, and redacting it would only
+		// shred ordinary words in the message.
+		return token.length >= 8 ? text.split(token).join("[token]") : text;
 	}
 
 	private assertOk(response: RequestUrlResponse, action: string): void {
@@ -323,9 +401,4 @@ export function fromBase64(encoded: string): string {
 		bytes[i] = binary.charCodeAt(i);
 	}
 	return new TextDecoder().decode(bytes);
-}
-
-/** GitHub's contents API takes base64 of the UTF-8 bytes. */
-export function toBase64(content: string): string {
-	return bytesToBase64(new TextEncoder().encode(content));
 }

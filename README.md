@@ -99,12 +99,14 @@ renames them all. An embed whose file cannot be found
 in the vault is flagged and left in the note exactly as written rather than being rewritten to
 a broken link.
 
-Images are uploaded **before** the post, so a post never lands referring to an image that
-failed to upload. An image already in the repository byte for byte is skipped rather than
+**The post and its images are published in one commit**, so they land together or not at
+all: a post never refers to an image that failed to upload, and a failed publish leaves the
+repository exactly as it was. The commit message is your template, followed — when images are
+included — by a list of the files it touches and whether each is new or changed. An image
+already in the repository byte for byte is skipped rather than
 committed again — the plugin compares the git blob hash of the local file against the one
 GitHub reports, reading the hashes for a whole folder in one request rather than downloading
-each image. If the repository cannot be checked, nothing is published. Each upload is its own
-commit, so publishing a post with two new images makes three commits.
+each image. If the repository cannot be checked, nothing is published.
 
 The check happens before the preview opens, so the preview lists every attachment as *new*,
 *changed* or *unchanged, skipped*. When the post itself is identical to what is already in the
@@ -161,9 +163,10 @@ Two cases short-circuit the diff: an output identical to what is already there s
 offers nothing to change, and a file too large for GitHub to return inline cannot be diffed,
 which the window says plainly before letting you replace it.
 
-The commit is made against the exact version the diff was built from. If the file changes on
-GitHub between the diff and the confirmation, the commit is rejected rather than quietly
-overwriting the newer version. The same goes for a file someone else created at the path after
+The commit is made against the exact version the diff was built from. If the post — or any
+image being replaced — changes on GitHub between the diff and the confirmation, nothing is
+committed rather than quietly overwriting the newer version. Commits that only touch other
+files are no obstacle: the plugin re-checks against them and commits on top. The same goes for a file someone else created at the path after
 it was checked. Go `Back` and continue to the preview again: the plugin reads the file afresh,
 so the diff you see is against the newer version before you publish over it.
 

@@ -7,7 +7,7 @@ import {
 	rewriteBody,
 	sanitiseAttachmentName,
 } from "./attachments";
-import { GithubClient, gitBlobSha, type FolderListing, type RemoteFile } from "./github";
+import { GithubClient, gitBlobSha, type CommitFile, type FolderListing, type RemoteFile } from "./github";
 import {
 	PreviewModal,
 	ReviewModal,
@@ -243,30 +243,6 @@ export default class PublishToGithubPlugin extends Plugin {
 		return plan;
 	}
 
-	/**
-	 * Commits each planned upload that is new or changed. Runs before the post is
-	 * written, so the post never lands referring to an image that failed to upload.
-	 */
-	private async uploadAttachments(plan: PlannedUpload[], postName: string): Promise<number> {
-		const pending = plan.filter((upload) => upload.status !== "unchanged");
-
-		let index = 0;
-		for (const upload of pending) {
-			index++;
-			new Notice(`Uploading attachment ${index} of ${pending.length}: ${upload.fileName}`, 3000);
-			// Against the SHA it was compared with, so an image that changed on GitHub
-			// since is rejected rather than replaced.
-			const verb = upload.status === "new" ? "Add" : "Update";
-			await this.client.publishBinary(
-				upload.path,
-				upload.bytes,
-				`${verb} ${upload.fileName} for ${postName}`,
-				upload.remoteSha
-			);
-		}
-		return pending.length;
-	}
-
 	private openReview(file: TFile, context: ReviewContext) {
 		// The modal edits context.properties in place, so stepping back from the
 		// preview reopens the review window with the user's edits still there.
@@ -338,6 +314,11 @@ export default class PublishToGithubPlugin extends Plugin {
 		}).open();
 	}
 
+	/**
+	 * Commits the post and its new or changed attachments as one commit, so a post
+	 * never lands referring to an image that failed to upload, and a failure
+	 * leaves the repository exactly as it was.
+	 */
 	private async commit(
 		file: TFile,
 		targetPath: string,
@@ -345,40 +326,45 @@ export default class PublishToGithubPlugin extends Plugin {
 		context: ReviewContext,
 		options: { expectedSha?: string | null; postUnchanged: boolean; uploads: PlannedUpload[] | null }
 	) {
-		const message = this.commitMessage(file, targetPath);
-
-		let uploaded: number;
 		try {
-			// The preview could not check the images: check them now, and stop if it still fails.
+			// The preview could not check the attachments: check them now, and stop if it still fails.
 			const plan = options.uploads ?? (await this.planUploads(context));
-			uploaded = await this.uploadAttachments(plan, file.basename);
-		} catch (error) {
-			new Notice(
-				`Attachment upload failed, so the post was not published: ${(error as Error).message}`,
-				10000
-			);
-			throw error;
-		}
+			const attachments = plan.filter((upload) => upload.status !== "unchanged");
 
-		if (options.postUnchanged) {
-			new Notice(
-				`Uploaded ${uploaded} attachment${uploaded === 1 ? "" : "s"}. ${targetPath} was already up to date, so it was left as is.`,
-				6000
-			);
-			return;
-		}
+			const files: CommitFile[] = attachments.map((upload) => ({
+				path: upload.path,
+				content: upload.bytes,
+				expectedSha: upload.remoteSha,
+			}));
+			if (!options.postUnchanged) {
+				files.unshift({ path: targetPath, content: output, expectedSha: options.expectedSha });
+			}
 
-		try {
-			const result = await this.client.publish(targetPath, output, message, options.expectedSha);
+			if (files.length === 0) {
+				new Notice(`Nothing to publish: ${targetPath} and its attachments are already up to date.`, 6000);
+				return;
+			}
+
+			const message = this.commitMessage(file, targetPath, {
+				post: options.postUnchanged ? null : options.expectedSha === null ? "new" : "changed",
+				attachments,
+			});
+			const progress = files.length > 1 ? (step: string) => new Notice(step, 3000) : undefined;
+			const result = await this.client.commitFiles(files, message, progress);
+
+			const count = attachments.length;
+			const withAttachments = count > 0 ? ` with ${count} attachment${count === 1 ? "" : "s"}` : "";
 			new Notice(
-				`${result.created ? "Created" : "Updated"} ${targetPath} on ${this.settings.branch}.`,
+				options.postUnchanged
+					? `Uploaded ${count} attachment${count === 1 ? "" : "s"}. ${targetPath} was already up to date, so it was left as is.`
+					: `${result.created.has(targetPath) ? "Created" : "Updated"} ${targetPath}${withAttachments} on ${this.settings.branch}.`,
 				6000
 			);
 		} catch (error) {
 			// Whatever is at the path may have moved on; going Back must read it afresh
 			// rather than diff and commit against the version that was just rejected.
 			context.forget(targetPath);
-			new Notice(`Publish failed: ${(error as Error).message}`, 10000);
+			new Notice(`Publish failed, and nothing was committed: ${(error as Error).message}`, 10000);
 			throw error;
 		}
 	}
@@ -394,7 +380,16 @@ export default class PublishToGithubPlugin extends Plugin {
 		return folder.length > 0 ? `${folder}/${attachmentName}` : attachmentName;
 	}
 
-	private commitMessage(file: TFile, targetPath: string): string {
+	/**
+	 * The template fills the summary line. When a commit carries more than the post
+	 * alone, the files it touches are listed beneath, so the history says which
+	 * images went up with which post.
+	 */
+	private commitMessage(
+		file: TFile,
+		targetPath: string,
+		contents: { post: "new" | "changed" | null; attachments: PlannedUpload[] }
+	): string {
 		const template = this.settings.commitMessageTemplate.trim() || DEFAULT_SETTINGS.commitMessageTemplate;
 		const values: Record<string, string> = {
 			filename: file.basename,
@@ -403,7 +398,15 @@ export default class PublishToGithubPlugin extends Plugin {
 		};
 		// A replacer function, not a replacement string: a name like "Cost $& more"
 		// must not be read as a replacement pattern.
-		return template.replace(/\{\{(filename|path|date)\}\}/g, (_match, key: string) => values[key]);
+		const summary = template.replace(/\{\{(filename|path|date)\}\}/g, (_match, key: string) => values[key]);
+
+		if (contents.attachments.length === 0) return summary;
+
+		const lines = [
+			...(contents.post ? [`- ${targetPath} (${contents.post})`] : []),
+			...contents.attachments.map((upload) => `- ${upload.path} (${upload.status})`),
+		];
+		return `${summary}\n\n${lines.join("\n")}`;
 	}
 }
 

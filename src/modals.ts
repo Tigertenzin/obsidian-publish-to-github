@@ -811,7 +811,7 @@ export class PreviewModal extends Modal {
 			text:
 				pending === 0
 					? `All ${uploads.length} ${noun}${uploads.length === 1 ? " is" : "s are"} already in the repository unchanged:`
-					: `${pending} ${noun}${pending === 1 ? "" : "s"} will be uploaded before the post, each as its own commit:`,
+					: `${pending} ${noun}${pending === 1 ? "" : "s"} will be committed together with the post, in one commit:`,
 		});
 		const list = box.createEl("ul", { cls: "ptg-removed-list" });
 		for (const upload of uploads) {
@@ -969,7 +969,7 @@ export class ConfirmOverwriteModal extends Modal {
 
 		contentEl.createEl("p", {
 			cls: "ptg-hint",
-			text: "The commit will be rejected if the file has changed on GitHub since it was read.",
+			text: "Nothing is committed if the post or any of its attachments has changed on GitHub since it was read.",
 		});
 
 		new Setting(contentEl)
