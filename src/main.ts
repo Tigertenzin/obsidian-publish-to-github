@@ -327,10 +327,14 @@ export default class PublishToGithubPlugin extends Plugin {
 
 	private commitMessage(file: TFile, targetPath: string): string {
 		const template = this.settings.commitMessageTemplate.trim() || DEFAULT_SETTINGS.commitMessageTemplate;
-		return template
-			.replace(/\{\{filename\}\}/g, file.basename)
-			.replace(/\{\{path\}\}/g, targetPath)
-			.replace(/\{\{date\}\}/g, moment().format("YYYY-MM-DD"));
+		const values: Record<string, string> = {
+			filename: file.basename,
+			path: targetPath,
+			date: moment().format("YYYY-MM-DD"),
+		};
+		// A replacer function, not a replacement string: a name like "Cost $& more"
+		// must not be read as a replacement pattern.
+		return template.replace(/\{\{(filename|path|date)\}\}/g, (_match, key: string) => values[key]);
 	}
 }
 
