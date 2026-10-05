@@ -59,7 +59,9 @@ export default class PublishToGithubPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		// A deep copy, so the lists the settings tab edits in place are never the
+		// defaults' own: a fresh install would otherwise be editing DEFAULT_SETTINGS.
+		this.settings = Object.assign(structuredClone(DEFAULT_SETTINGS), await this.loadData());
 
 		// Older versions stored the removal list as one newline-joined string.
 		const removals = this.settings.propertiesToRemove as unknown;
