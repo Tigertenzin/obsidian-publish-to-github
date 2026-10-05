@@ -133,12 +133,47 @@ export function sanitiseAttachmentName(name: string): string {
 	const stem = at === -1 ? name : name.slice(0, at);
 	const extension = at === -1 ? "" : name.slice(at).toLowerCase();
 
-	const slug = stem
+	return `${slugOrHash(stem, "attachment")}${extension}`;
+}
+
+/**
+ * The subfolder a post's images are kept in, named after where the post itself
+ * is published — so two posts can never share one, and one post's images never
+ * overwrite another's. `postPath` is relative to the target folder.
+ */
+export function postAttachmentFolder(postPath: string): string {
+	const segments = postPath.split("/").filter((segment) => segment.length > 0);
+	const last = segments.length - 1;
+	if (last >= 0) segments[last] = segments[last].replace(/\.[a-z0-9]+$/i, "");
+
+	return segments
+		.filter((segment) => segment.length > 0)
+		.map((segment) => slugOrHash(segment, "post"))
+		.join("/");
+}
+
+/**
+ * A URL-safe slug. A name with nothing slug-worthy in it, such as one written
+ * entirely in a non-Latin script, falls back to a short hash of the original so
+ * that two such names still end up apart.
+ */
+function slugOrHash(text: string, fallback: string): string {
+	const slug = text
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, "-")
 		.replace(/^-+|-+$/g, "");
+	if (slug.length > 0) return slug;
+	return text.trim().length > 0 ? `${fallback}-${shortHash(text)}` : fallback;
+}
 
-	return `${slug.length > 0 ? slug : "attachment"}${extension}`;
+/** FNV-1a, as 8 hex digits: stable across runs, which is all a name needs. */
+function shortHash(text: string): string {
+	let hash = 0x811c9dc5;
+	for (let i = 0; i < text.length; i++) {
+		hash ^= text.charCodeAt(i);
+		hash = Math.imul(hash, 0x01000193);
+	}
+	return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
 /** The URL the published markdown points at. */

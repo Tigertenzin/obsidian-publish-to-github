@@ -60,6 +60,11 @@ export interface ReviewContext {
 	branch: string;
 	/** Turns the filename as typed into the full path inside the repository. */
 	resolvePath: (fileName: string) => string;
+	/**
+	 * Where an image is put, relative to the attachment folder. Follows the post's
+	 * filename as it currently stands, since images may be grouped by post.
+	 */
+	attachmentPath: (attachmentName: string) => string;
 	/** Reads whatever is at a path, cached per path across both windows. */
 	lookup: (path: string) => Promise<RemoteFile | null>;
 	/** Every property the published copy will carry. Edited in place. */
@@ -91,6 +96,8 @@ export class ReviewModal extends Modal {
 	private lookupSeq = 0;
 	private lookupTimer: number | null = null;
 	private suggests: TextSuggest[] = [];
+	/** Redraws each image's published URL, which moves when the post is renamed. */
+	private urlRenderers: Array<() => void> = [];
 
 	constructor(
 		app: App,
@@ -180,6 +187,7 @@ export class ReviewModal extends Modal {
 			.onChange((value) => {
 				this.context.fileName = value;
 				this.renderPath();
+				for (const render of this.urlRenderers) render();
 				// The destination depends on the name, so re-check it as it settles.
 				this.scheduleLookup();
 			});
@@ -307,7 +315,10 @@ export class ReviewModal extends Modal {
 
 			const urlEl = row.createDiv({ cls: "ptg-attachment-url" });
 			const showUrl = () =>
-				urlEl.setText(attachmentUrl(this.context.attachmentUrlPrefix, attachment.fileName));
+				urlEl.setText(
+					attachmentUrl(this.context.attachmentUrlPrefix, this.context.attachmentPath(attachment.fileName))
+				);
+			this.urlRenderers.push(showUrl);
 
 			name.setValue(attachment.fileName).onChange((value) => {
 				attachment.fileName = value.trim();
@@ -596,6 +607,8 @@ export interface PreviewOptions {
 	/** The file currently at the target path, or null when the path is free. */
 	remote: RemoteFile | null;
 	attachments: Attachment[];
+	/** Where each image goes, relative to the attachment folder. */
+	attachmentPath: (attachmentName: string) => string;
 	/** Set when the destination lookup failed, so the diff could not be built. */
 	remoteError: string | null;
 	onBack: () => void;
@@ -704,7 +717,7 @@ export class PreviewModal extends Modal {
 		});
 		const list = box.createEl("ul", { cls: "ptg-removed-list" });
 		for (const attachment of uploading) {
-			list.createEl("li", { text: attachment.fileName });
+			list.createEl("li", { text: this.options.attachmentPath(attachment.fileName) });
 		}
 	}
 

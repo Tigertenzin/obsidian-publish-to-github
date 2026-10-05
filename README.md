@@ -78,6 +78,15 @@ uploading on, publishing a post also:
 3. uploads it into the repository's attachment folder under a URL-safe name, and
 4. rewrites the embed to point at the uploaded copy.
 
+**Each post gets its own image folder.** By default a post's images go into a subfolder of
+the attachment folder named after the post: `My Post.md` published to `2024/` puts its
+images in `posts/attachments/2024/my-post/`. Two posts that both embed a `diagram.png` can
+then never overwrite each other's image. The subfolder follows the post's filename as you
+edit it in the review window. Turn off *Group images by post* to put every image straight
+into the attachment folder instead. A name with nothing URL-safe in it, such as one written
+entirely in Japanese, becomes `post-` or `attachment-` plus a short hash of the original, so
+two such names still stay apart.
+
 The review window lists every image with its size, the filename it will be uploaded under,
 and an alt text field — a wikilink embed carries no alt text, so this is the place to add it.
 Both are editable, and the resulting URL is shown beneath. An embed whose file cannot be found
@@ -246,6 +255,7 @@ comment syntax and stays invisible in reading view.
 | --- | --- |
 | Upload embedded images | Whether to handle embeds at all. Off leaves every embed untouched. |
 | Attachment folder | Folder inside the repository that images are committed to. Browses existing folders the same way. |
+| Group images by post | Put each post's images in their own subfolder, named after the post. On by default; off puts every image straight into the attachment folder. |
 | Attachment URL prefix | What the rewritten embeds point at — usually the attachment folder with a leading slash, since the site serves it from the root. |
 | Image sizes | Keep an Obsidian size as an `<img width>` tag, or drop it for plain markdown. |
 

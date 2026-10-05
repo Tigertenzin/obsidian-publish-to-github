@@ -354,16 +354,23 @@ export function buildTargetPath(
 	fileName: string,
 	settings: PublishToGithubSettings
 ): string {
+	return [normaliseSegment(settings.targetFolder), postRelativePath(vaultPath, fileName, settings)]
+		.filter((segment) => segment.length > 0)
+		.join("/");
+}
+
+/** The post's path below the target folder: any mirrored vault folders, then the filename. */
+export function postRelativePath(
+	vaultPath: string,
+	fileName: string,
+	settings: PublishToGithubSettings
+): string {
 	const sourceName = defaultFileName(vaultPath);
 	const vaultFolder = vaultPath.slice(0, Math.max(0, vaultPath.length - sourceName.length));
 
-	const segments = [
-		normaliseSegment(settings.targetFolder),
-		settings.preserveFolderStructure ? normaliseSegment(vaultFolder) : "",
-		normaliseFileName(fileName),
-	].filter((segment) => segment.length > 0);
-
-	return segments.join("/");
+	return [settings.preserveFolderStructure ? normaliseSegment(vaultFolder) : "", normaliseFileName(fileName)]
+		.filter((segment) => segment.length > 0)
+		.join("/");
 }
 
 function normaliseSegment(segment: string): string {

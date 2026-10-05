@@ -2,6 +2,7 @@ import { MarkdownView, Notice, Plugin, TFile, moment } from "obsidian";
 import {
 	attachmentUrl,
 	findEmbeds,
+	postAttachmentFolder,
 	renderEmbed,
 	rewriteBody,
 	sanitiseAttachmentName,
@@ -20,6 +21,7 @@ import {
 	buildTargetPath,
 	defaultFileName,
 	parseNote,
+	postRelativePath,
 	resolveProperties,
 	type ParsedNote,
 } from "./transform";
@@ -117,6 +119,7 @@ export default class PublishToGithubPlugin extends Plugin {
 			repoLabel: `${this.settings.owner}/${this.settings.repo}`,
 			branch: this.settings.branch,
 			resolvePath: (fileName) => buildTargetPath(file.path, fileName, this.settings),
+			attachmentPath: (attachmentName) => this.attachmentPath(file.path, context.fileName, attachmentName),
 			lookup,
 			properties,
 			removed,
@@ -172,14 +175,14 @@ export default class PublishToGithubPlugin extends Plugin {
 	 * Runs before the post is written, so the post never lands referring to an
 	 * image that failed to upload.
 	 */
-	private async uploadAttachments(attachments: Attachment[], postName: string): Promise<void> {
-		const uploadable = attachments.filter((item) => item.file !== null && item.fileName.length > 0);
+	private async uploadAttachments(context: ReviewContext, postName: string): Promise<void> {
+		const uploadable = context.attachments.filter((item) => item.file !== null && item.fileName.length > 0);
 		if (uploadable.length === 0) return;
 
 		let index = 0;
 		for (const attachment of uploadable) {
 			index++;
-			const path = joinPath(this.settings.attachmentFolder, attachment.fileName);
+			const path = joinPath(this.settings.attachmentFolder, context.attachmentPath(attachment.fileName));
 			const bytes = await this.app.vault.readBinary(attachment.file as TFile);
 
 			const existing = await this.client.getFile(path).catch(() => null);
@@ -215,7 +218,7 @@ export default class PublishToGithubPlugin extends Plugin {
 				length: attachment.embed.length,
 				text: renderEmbed(
 					attachment.alt,
-					attachmentUrl(this.settings.attachmentUrlPrefix, attachment.fileName),
+					attachmentUrl(this.settings.attachmentUrlPrefix, context.attachmentPath(attachment.fileName)),
 					attachment.embed.width,
 					this.settings.imageSizeStyle
 				),
@@ -245,15 +248,16 @@ export default class PublishToGithubPlugin extends Plugin {
 			remote,
 			remoteError,
 			onBack: () => this.openReview(file, note, context),
+			attachments: context.attachments,
+			attachmentPath: context.attachmentPath,
 			// The SHA the diff was built against, so a file that moved on underneath
 			// us is rejected rather than clobbered. Undefined means "look it up".
-			attachments: context.attachments,
 			onPublish: () =>
 				this.commit(
 					file,
 					targetPath,
 					output,
-					context.attachments,
+					context,
 					remoteError ? undefined : remote?.sha ?? null
 				),
 		}).open();
@@ -263,13 +267,13 @@ export default class PublishToGithubPlugin extends Plugin {
 		file: TFile,
 		targetPath: string,
 		output: string,
-		attachments: Attachment[],
+		context: ReviewContext,
 		expectedSha?: string | null
 	) {
 		const message = this.commitMessage(file, targetPath);
 
 		try {
-			await this.uploadAttachments(attachments, file.basename);
+			await this.uploadAttachments(context, file.basename);
 		} catch (error) {
 			new Notice(
 				`Attachment upload failed, so the post was not published: ${(error as Error).message}`,
@@ -288,6 +292,17 @@ export default class PublishToGithubPlugin extends Plugin {
 			new Notice(`Publish failed: ${(error as Error).message}`, 10000);
 			throw error;
 		}
+	}
+
+	/**
+	 * Where an image goes, relative to the attachment folder: inside the post's own
+	 * subfolder when images are grouped by post, which follows the post's filename
+	 * as it currently stands in the review window.
+	 */
+	private attachmentPath(vaultPath: string, postFileName: string, attachmentName: string): string {
+		if (!this.settings.groupAttachmentsByPost) return attachmentName;
+		const folder = postAttachmentFolder(postRelativePath(vaultPath, postFileName, this.settings));
+		return folder.length > 0 ? `${folder}/${attachmentName}` : attachmentName;
 	}
 
 	private commitMessage(file: TFile, targetPath: string): string {

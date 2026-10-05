@@ -47,6 +47,8 @@ export interface PublishToGithubSettings {
 	// Attachments
 	uploadAttachments: boolean;
 	attachmentFolder: string;
+	/** Keep each post's images in a subfolder named after the post. */
+	groupAttachmentsByPost: boolean;
 	attachmentUrlPrefix: string;
 	imageSizeStyle: ImageSizeStyle;
 }
@@ -68,6 +70,7 @@ export const DEFAULT_SETTINGS: PublishToGithubSettings = {
 
 	uploadAttachments: true,
 	attachmentFolder: "posts/attachments",
+	groupAttachmentsByPost: true,
 	attachmentUrlPrefix: "/posts/attachments",
 	imageSizeStyle: "html",
 };
@@ -512,6 +515,18 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 					});
 				this.suggest(text.inputEl, () => this.repoFolders());
 			});
+
+		new Setting(containerEl)
+			.setName("Group images by post")
+			.setDesc(
+				"Put each post's images in a subfolder of the attachment folder named after the post, so images from different posts that share a filename cannot overwrite each other. Off puts every image straight into the attachment folder."
+			)
+			.addToggle((toggle) =>
+				toggle.setValue(this.plugin.settings.groupAttachmentsByPost).onChange(async (value) => {
+					this.plugin.settings.groupAttachmentsByPost = value;
+					await this.save();
+				})
+			);
 
 		new Setting(containerEl)
 			.setName("Attachment URL prefix")
