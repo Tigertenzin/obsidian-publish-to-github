@@ -31,7 +31,13 @@ export interface ParsedNote {
 	frontmatterError: string | null;
 }
 
-const FRONTMATTER_PATTERN = /^---[ \t]*\r?\n([\s\S]*?)\r?\n?---[ \t]*(?:\r?\n|$)/;
+/**
+ * A frontmatter block at the very top of the note. Both fences must sit on lines
+ * of their own — a value that merely ends in "---" does not close the block — and
+ * the closing fence is consumed with the block, so it is never mistaken for a
+ * break marker that happens to also be "---".
+ */
+const FRONTMATTER_PATTERN = /^---[ \t]*\r?\n(?:([\s\S]*?)\r?\n)??---[ \t]*(?:\r?\n|$)/;
 
 /** Splits a note into its frontmatter object and its body. */
 export function parseNote(content: string): ParsedNote {
