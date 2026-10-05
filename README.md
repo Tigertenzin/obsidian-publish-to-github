@@ -46,7 +46,7 @@ works the same way. Point the target folder at the site's posts directory (`src/
    will cut.
 2. **Preview window** — shows the exact markdown that will be committed, and where. `Back`
    returns to the review window with your edits intact.
-3. **Overwrite confirmation** — only when a file is already at that path. See below.
+3. **Overwrite confirmation** — only when a different file is already at that path. See below.
 
 Edits in the review window apply to that one publish. Nothing there is written back to the
 note or to the settings.
@@ -103,8 +103,14 @@ Images are uploaded **before** the post, so a post never lands referring to an i
 failed to upload. An image already in the repository byte for byte is skipped rather than
 committed again — the plugin compares the git blob hash of the local file against the one
 GitHub reports, reading the hashes for a whole folder in one request rather than downloading
-each image. If the repository cannot be checked, nothing is published. Each upload is its own commit, so publishing a post with two new images makes
-three commits.
+each image. If the repository cannot be checked, nothing is published. Each upload is its own
+commit, so publishing a post with two new images makes three commits.
+
+The check happens before the preview opens, so the preview lists every attachment as *new*,
+*changed* or *unchanged, skipped*. When the post itself is identical to what is already in the
+repository it is left alone — no commit, and no overwrite warning — and only new or changed
+attachments are uploaded. If nothing at all would change, the preview says so and there is
+nothing to press.
 
 **Sizes.** `![[image.png|450]]` has no markdown equivalent. By default the size is kept by
 publishing an `<img src="…" alt="…" width="450">` tag, which any markdown renderer passes

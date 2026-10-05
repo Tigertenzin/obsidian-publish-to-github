@@ -59,6 +59,26 @@ export interface Attachment {
 	missing: boolean;
 }
 
+/** Whether an attachment is already in the repository as it stands in the vault. */
+export type UploadStatus = "new" | "changed" | "unchanged";
+
+/** One file to be committed alongside the post, checked against the repository. */
+export interface PlannedUpload {
+	/** Full path inside the repository. */
+	path: string;
+	fileName: string;
+	bytes: ArrayBuffer;
+	/** SHA of what is at the path now, or null when nothing is. */
+	remoteSha: string | null;
+	status: UploadStatus;
+}
+
+const UPLOAD_STATUS_LABELS: Record<UploadStatus, string> = {
+	new: "new",
+	changed: "changed",
+	unchanged: "unchanged, skipped",
+};
+
 export interface ReviewContext {
 	/** Vault path of the note being published. */
 	sourcePath: string;
@@ -662,11 +682,14 @@ export interface PreviewOptions {
 	output: string;
 	/** The file currently at the target path, or null when the path is free. */
 	remote: RemoteFile | null;
-	attachments: Attachment[];
-	/** Where each image goes, relative to the attachment folder. */
-	attachmentPath: (attachmentName: string) => string;
 	/** Set when the destination lookup failed, so the diff could not be built. */
 	remoteError: string | null;
+	/** True when the file at the target path already matches the output exactly. */
+	postUnchanged: boolean;
+	/** Each attachment checked against the repository, or null when that check failed. */
+	uploads: PlannedUpload[] | null;
+	/** Why the attachments could not be checked. */
+	uploadsError: string | null;
 	onBack: () => void;
 	onPublish: () => Promise<void>;
 }
@@ -695,7 +718,9 @@ export class PreviewModal extends Modal {
 		contentEl.empty();
 		contentEl.addClass("ptg-modal");
 
-		const overwriting = this.options.remote !== null;
+		// Replacing the post is what warrants a warning and a second confirmation;
+		// an unchanged post is left alone, whatever happens to its images.
+		const overwriting = this.options.remote !== null && !this.options.postUnchanged;
 		contentEl.createEl("h2", { text: overwriting ? "Review changes" : "Preview" });
 		contentEl.createDiv({
 			cls: "ptg-summary-row",
@@ -732,11 +757,15 @@ export class PreviewModal extends Modal {
 			return;
 		}
 
-		if (this.diff?.identical) {
-			contentEl.createDiv({
-				cls: "ptg-note",
-				text: "The published copy is identical to the file already in the repository — there is nothing to change.",
-			});
+		if (this.options.postUnchanged) {
+			const pending = this.pendingUploads();
+			let text = "The post is identical to the file already in the repository and will be left as is.";
+			if (this.nothingToPublish()) {
+				text = "Nothing to publish: the post and its attachments are already up to date in the repository.";
+			} else if (this.options.uploads !== null) {
+				text += ` Only the ${pending} new or changed attachment${pending === 1 ? "" : "s"} below will be uploaded.`;
+			}
+			contentEl.createDiv({ cls: "ptg-note", text });
 			return;
 		}
 
@@ -762,27 +791,43 @@ export class PreviewModal extends Modal {
 		}
 	}
 
-	/** Names the images that will be committed alongside the post. */
+	/** Lists the attachments with what will happen to each. */
 	private renderAttachmentSummary(contentEl: HTMLElement): void {
-		// An image embedded more than once is uploaded once.
-		const uploading = [
-			...new Set(
-				this.options.attachments
-					.filter((a) => !a.missing && a.fileName.length > 0)
-					.map((a) => this.options.attachmentPath(a.fileName))
-			),
-		];
-		if (uploading.length === 0) return;
-		const noun = uploading.every((path) => mediaKind(path) === "image") ? "image" : "file";
+		if (this.options.uploadsError) {
+			contentEl.createDiv({
+				cls: "ptg-warning",
+				text: `The attachments could not be checked against the repository (${this.options.uploadsError}). Publishing checks them again, and stops if it still cannot.`,
+			});
+			return;
+		}
 
+		const uploads = this.options.uploads ?? [];
+		if (uploads.length === 0) return;
+
+		const pending = this.pendingUploads();
+		const noun = uploads.every((upload) => mediaKind(upload.path) === "image") ? "image" : "attachment";
 		const box = contentEl.createDiv({ cls: "ptg-note" });
 		box.createDiv({
-			text: `${uploading.length} ${noun}${uploading.length === 1 ? "" : "s"} will be uploaded before the post, each as its own commit:`,
+			text:
+				pending === 0
+					? `All ${uploads.length} ${noun}${uploads.length === 1 ? " is" : "s are"} already in the repository unchanged:`
+					: `${pending} ${noun}${pending === 1 ? "" : "s"} will be uploaded before the post, each as its own commit:`,
 		});
 		const list = box.createEl("ul", { cls: "ptg-removed-list" });
-		for (const path of uploading) {
-			list.createEl("li", { text: path });
+		for (const upload of uploads) {
+			const item = list.createEl("li", { text: `${upload.path} ` });
+			item.createSpan({ cls: "ptg-origin", text: UPLOAD_STATUS_LABELS[upload.status] });
 		}
+	}
+
+	/** How many checked attachments will actually be committed. */
+	private pendingUploads(): number {
+		return (this.options.uploads ?? []).filter((upload) => upload.status !== "unchanged").length;
+	}
+
+	/** True only when it is certain that publishing would change nothing at all. */
+	private nothingToPublish(): boolean {
+		return this.options.postUnchanged && this.options.uploads !== null && this.pendingUploads() === 0;
 	}
 
 	private renderViewSwitch(contentEl: HTMLElement): void {
@@ -843,6 +888,10 @@ export class PreviewModal extends Modal {
 			)
 			.addButton((button) => button.setButtonText("Cancel").onClick(() => this.close()))
 			.addButton((button) => {
+				if (this.nothingToPublish()) {
+					button.setButtonText("Nothing to publish").setDisabled(true);
+					return;
+				}
 				button.setButtonText(overwriting ? "Overwrite…" : "Publish").setCta();
 				if (overwriting) button.setWarning();
 				button.onClick(() => {

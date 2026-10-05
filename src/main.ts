@@ -8,7 +8,13 @@ import {
 	sanitiseAttachmentName,
 } from "./attachments";
 import { GithubClient, gitBlobSha, type FolderListing, type RemoteFile } from "./github";
-import { PreviewModal, ReviewModal, type Attachment, type ReviewContext } from "./modals";
+import {
+	PreviewModal,
+	ReviewModal,
+	type Attachment,
+	type PlannedUpload,
+	type ReviewContext,
+} from "./modals";
 import {
 	DEFAULT_SETTINGS,
 	PublishToGithubSettingTab,
@@ -183,24 +189,23 @@ export default class PublishToGithubPlugin extends Plugin {
 	}
 
 	/**
-	 * Uploads each attachment that is not already in the repository unchanged.
-	 * Runs before the post is written, so the post never lands referring to an
-	 * image that failed to upload.
+	 * Works out what each attachment needs before anything is shown: its path in
+	 * the repository, its bytes, and whether it is new, changed, or already there
+	 * unchanged — so the preview can say exactly what will be committed, and an
+	 * unchanged post with unchanged images is recognised as nothing to publish.
 	 */
-	private async uploadAttachments(context: ReviewContext, postName: string): Promise<void> {
+	private async planUploads(context: ReviewContext): Promise<PlannedUpload[]> {
 		// One upload per repository path: an image embedded more than once is sent once.
-		const uploads = new Map<string, Attachment>();
+		const unique = new Map<string, Attachment>();
 		for (const attachment of context.attachments) {
 			if (attachment.file === null || attachment.fileName.length === 0) continue;
 			const path = joinPath(this.settings.attachmentFolder, context.attachmentPath(attachment.fileName));
-			if (!uploads.has(path)) uploads.set(path, attachment);
+			if (!unique.has(path)) unique.set(path, attachment);
 		}
-		if (uploads.size === 0) return;
 
 		// What is already there is read one folder at a time — with images grouped
 		// by post, one call for the whole publish — rather than downloading each
-		// image just to learn its SHA. A failed read stops the publish: treating it
-		// as "nothing there" would only fail later, less clearly, on the upload.
+		// image just to learn its SHA.
 		const listings = new Map<string, FolderListing>();
 		const remoteSha = async (path: string): Promise<string | null> => {
 			const at = path.lastIndexOf("/");
@@ -219,20 +224,46 @@ export default class PublishToGithubPlugin extends Plugin {
 			return listing.complete ? null : (await this.client.getFile(path))?.sha ?? null;
 		};
 
-		let index = 0;
-		for (const [path, attachment] of uploads) {
-			index++;
+		const plan: PlannedUpload[] = [];
+		for (const [path, attachment] of unique) {
 			const bytes = await this.app.vault.readBinary(attachment.file as TFile);
+			const existing = await remoteSha(path);
+			// Without a local hash there is no telling, so it is sent as changed.
+			const local = await gitBlobSha(bytes);
 
-			const existingSha = await remoteSha(path);
-			const localSha = await gitBlobSha(bytes);
-			if (existingSha && localSha && existingSha === localSha) {
-				continue;
-			}
-
-			new Notice(`Uploading attachment ${index} of ${uploads.size}: ${attachment.fileName}`, 3000);
-			await this.client.publishBinary(path, bytes, `Add ${attachment.fileName} for ${postName}`, existingSha);
+			plan.push({
+				path,
+				fileName: attachment.fileName,
+				bytes,
+				remoteSha: existing,
+				status: existing === null ? "new" : existing === local ? "unchanged" : "changed",
+			});
 		}
+		return plan;
+	}
+
+	/**
+	 * Commits each planned upload that is new or changed. Runs before the post is
+	 * written, so the post never lands referring to an image that failed to upload.
+	 */
+	private async uploadAttachments(plan: PlannedUpload[], postName: string): Promise<number> {
+		const pending = plan.filter((upload) => upload.status !== "unchanged");
+
+		let index = 0;
+		for (const upload of pending) {
+			index++;
+			new Notice(`Uploading attachment ${index} of ${pending.length}: ${upload.fileName}`, 3000);
+			// Against the SHA it was compared with, so an image that changed on GitHub
+			// since is rejected rather than replaced.
+			const verb = upload.status === "new" ? "Add" : "Update";
+			await this.client.publishBinary(
+				upload.path,
+				upload.bytes,
+				`${verb} ${upload.fileName} for ${postName}`,
+				upload.remoteSha
+			);
+		}
+		return pending.length;
 	}
 
 	private openReview(file: TFile, note: ParsedNote, context: ReviewContext) {
@@ -274,6 +305,16 @@ export default class PublishToGithubPlugin extends Plugin {
 			remoteError = (error as Error).message;
 		}
 
+		let uploads: PlannedUpload[] | null = null;
+		let uploadsError: string | null = null;
+		try {
+			uploads = await this.planUploads(context);
+		} catch (error) {
+			uploadsError = (error as Error).message;
+		}
+
+		const postUnchanged = remote !== null && !remote.tooLarge && remote.content === output;
+
 		new PreviewModal(this.app, {
 			targetPath,
 			repoLabel: context.repoLabel,
@@ -281,19 +322,18 @@ export default class PublishToGithubPlugin extends Plugin {
 			output,
 			remote,
 			remoteError,
+			postUnchanged,
+			uploads,
+			uploadsError,
 			onBack: () => this.openReview(file, note, context),
-			attachments: context.attachments,
-			attachmentPath: context.attachmentPath,
 			// The SHA the diff was built against, so a file that moved on underneath
 			// us is rejected rather than clobbered. Undefined means "look it up".
 			onPublish: () =>
-				this.commit(
-					file,
-					targetPath,
-					output,
-					context,
-					remoteError ? undefined : remote?.sha ?? null
-				),
+				this.commit(file, targetPath, output, context, {
+					expectedSha: remoteError ? undefined : remote?.sha ?? null,
+					postUnchanged,
+					uploads,
+				}),
 		}).open();
 	}
 
@@ -302,12 +342,15 @@ export default class PublishToGithubPlugin extends Plugin {
 		targetPath: string,
 		output: string,
 		context: ReviewContext,
-		expectedSha?: string | null
+		options: { expectedSha?: string | null; postUnchanged: boolean; uploads: PlannedUpload[] | null }
 	) {
 		const message = this.commitMessage(file, targetPath);
 
+		let uploaded: number;
 		try {
-			await this.uploadAttachments(context, file.basename);
+			// The preview could not check the images: check them now, and stop if it still fails.
+			const plan = options.uploads ?? (await this.planUploads(context));
+			uploaded = await this.uploadAttachments(plan, file.basename);
 		} catch (error) {
 			new Notice(
 				`Attachment upload failed, so the post was not published: ${(error as Error).message}`,
@@ -316,8 +359,16 @@ export default class PublishToGithubPlugin extends Plugin {
 			throw error;
 		}
 
+		if (options.postUnchanged) {
+			new Notice(
+				`Uploaded ${uploaded} attachment${uploaded === 1 ? "" : "s"}. ${targetPath} was already up to date, so it was left as is.`,
+				6000
+			);
+			return;
+		}
+
 		try {
-			const result = await this.client.publish(targetPath, output, message, expectedSha);
+			const result = await this.client.publish(targetPath, output, message, options.expectedSha);
 			new Notice(
 				`${result.created ? "Created" : "Updated"} ${targetPath} on ${this.settings.branch}.`,
 				6000
