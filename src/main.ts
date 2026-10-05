@@ -138,6 +138,8 @@ export default class PublishToGithubPlugin extends Plugin {
 		if (!this.settings.uploadAttachments) return [];
 
 		const taken = new Set<string>();
+		// The same image embedded twice is one upload under one name.
+		const nameOf = new Map<string, string>();
 
 		return findEmbeds(body).map((embed) => {
 			// Resolved the way Obsidian resolves the link itself, so shortest-path
@@ -146,17 +148,23 @@ export default class PublishToGithubPlugin extends Plugin {
 
 			let fileName = "";
 			if (target) {
-				fileName = sanitiseAttachmentName(target.name);
-				// Two different images can sanitise to the same name; keep them apart.
-				if (taken.has(fileName)) {
-					const at = fileName.lastIndexOf(".");
-					const stem = at === -1 ? fileName : fileName.slice(0, at);
-					const extension = at === -1 ? "" : fileName.slice(at);
-					let suffix = 2;
-					while (taken.has(`${stem}-${suffix}${extension}`)) suffix++;
-					fileName = `${stem}-${suffix}${extension}`;
+				const known = nameOf.get(target.path);
+				if (known !== undefined) {
+					fileName = known;
+				} else {
+					fileName = sanitiseAttachmentName(target.name);
+					// Two different images can sanitise to the same name; keep them apart.
+					if (taken.has(fileName)) {
+						const at = fileName.lastIndexOf(".");
+						const stem = at === -1 ? fileName : fileName.slice(0, at);
+						const extension = at === -1 ? "" : fileName.slice(at);
+						let suffix = 2;
+						while (taken.has(`${stem}-${suffix}${extension}`)) suffix++;
+						fileName = `${stem}-${suffix}${extension}`;
+					}
+					taken.add(fileName);
+					nameOf.set(target.path, fileName);
 				}
-				taken.add(fileName);
 			}
 
 			return {
@@ -176,13 +184,18 @@ export default class PublishToGithubPlugin extends Plugin {
 	 * image that failed to upload.
 	 */
 	private async uploadAttachments(context: ReviewContext, postName: string): Promise<void> {
-		const uploadable = context.attachments.filter((item) => item.file !== null && item.fileName.length > 0);
-		if (uploadable.length === 0) return;
+		// One upload per repository path: an image embedded more than once is sent once.
+		const uploads = new Map<string, Attachment>();
+		for (const attachment of context.attachments) {
+			if (attachment.file === null || attachment.fileName.length === 0) continue;
+			const path = joinPath(this.settings.attachmentFolder, context.attachmentPath(attachment.fileName));
+			if (!uploads.has(path)) uploads.set(path, attachment);
+		}
+		if (uploads.size === 0) return;
 
 		let index = 0;
-		for (const attachment of uploadable) {
+		for (const [path, attachment] of uploads) {
 			index++;
-			const path = joinPath(this.settings.attachmentFolder, context.attachmentPath(attachment.fileName));
 			const bytes = await this.app.vault.readBinary(attachment.file as TFile);
 
 			const existing = await this.client.getFile(path).catch(() => null);
@@ -191,7 +204,7 @@ export default class PublishToGithubPlugin extends Plugin {
 				continue;
 			}
 
-			new Notice(`Uploading attachment ${index} of ${uploadable.length}: ${attachment.fileName}`, 3000);
+			new Notice(`Uploading attachment ${index} of ${uploads.size}: ${attachment.fileName}`, 3000);
 			await this.client.publishBinary(
 				path,
 				bytes,

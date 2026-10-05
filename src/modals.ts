@@ -274,6 +274,9 @@ export class ReviewModal extends Modal {
 
 		const list = contentEl.createDiv({ cls: "ptg-property-list" });
 
+		// Embeds of the same vault file share one upload, so their names move together.
+		const namesByFile = new Map<string, Array<{ attachment: Attachment; input: TextComponent; showUrl: () => void }>>();
+
 		for (const attachment of attachments) {
 			const row = list.createDiv({ cls: "ptg-property" });
 			const head = row.createDiv({ cls: "ptg-property-head" });
@@ -320,9 +323,21 @@ export class ReviewModal extends Modal {
 				);
 			this.urlRenderers.push(showUrl);
 
+			const filePath = attachment.file?.path ?? "";
+			const siblings = namesByFile.get(filePath) ?? [];
+			siblings.push({ attachment, input: name, showUrl });
+			namesByFile.set(filePath, siblings);
+
+			if (siblings.length > 1) {
+				head.createSpan({ cls: "ptg-origin", text: "same image as above" });
+			}
+
 			name.setValue(attachment.fileName).onChange((value) => {
-				attachment.fileName = value.trim();
-				showUrl();
+				for (const sibling of siblings) {
+					sibling.attachment.fileName = value.trim();
+					if (sibling.input !== name) sibling.input.setValue(value);
+					sibling.showUrl();
+				}
 			});
 			showUrl();
 		}
@@ -708,7 +723,14 @@ export class PreviewModal extends Modal {
 
 	/** Names the images that will be committed alongside the post. */
 	private renderAttachmentSummary(contentEl: HTMLElement): void {
-		const uploading = this.options.attachments.filter((a) => !a.missing && a.fileName.length > 0);
+		// An image embedded more than once is uploaded once.
+		const uploading = [
+			...new Set(
+				this.options.attachments
+					.filter((a) => !a.missing && a.fileName.length > 0)
+					.map((a) => this.options.attachmentPath(a.fileName))
+			),
+		];
 		if (uploading.length === 0) return;
 
 		const box = contentEl.createDiv({ cls: "ptg-note" });
@@ -716,8 +738,8 @@ export class PreviewModal extends Modal {
 			text: `${uploading.length} image${uploading.length === 1 ? "" : "s"} will be uploaded before the post, each as its own commit:`,
 		});
 		const list = box.createEl("ul", { cls: "ptg-removed-list" });
-		for (const attachment of uploading) {
-			list.createEl("li", { text: this.options.attachmentPath(attachment.fileName) });
+		for (const path of uploading) {
+			list.createEl("li", { text: path });
 		}
 	}
 
