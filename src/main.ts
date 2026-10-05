@@ -1,4 +1,4 @@
-import { MarkdownView, Notice, Plugin, TFile, moment } from "obsidian";
+import { MarkdownView, Notice, Plugin, TFile } from "obsidian";
 import {
 	attachmentUrl,
 	findEmbeds,
@@ -20,6 +20,7 @@ import {
 	PublishToGithubSettingTab,
 	type PublishToGithubSettings,
 } from "./settings";
+import { expandPlaceholders } from "./placeholders";
 import { convertHighlights, findNoteLinks, noteLinksToText, stripComments } from "./syntax";
 import { buildVaultIndex } from "./vault";
 import {
@@ -27,6 +28,7 @@ import {
 	buildOutput,
 	buildTargetPath,
 	defaultFileName,
+	normaliseFileName,
 	parseNote,
 	postRelativePath,
 	resolveProperties,
@@ -52,6 +54,24 @@ export default class PublishToGithubPlugin extends Plugin {
 		});
 
 		this.addSettingTab(new PublishToGithubSettingTab(this.app, this));
+
+		// The remembered filenames are keyed by vault path, so they follow the note.
+		this.registerEvent(
+			this.app.vault.on("rename", (file, oldPath) => {
+				const remembered = this.settings.publishedFileNames[oldPath];
+				if (remembered === undefined) return;
+				delete this.settings.publishedFileNames[oldPath];
+				this.settings.publishedFileNames[file.path] = remembered;
+				void this.saveSettings();
+			})
+		);
+		this.registerEvent(
+			this.app.vault.on("delete", (file) => {
+				if (!(file.path in this.settings.publishedFileNames)) return;
+				delete this.settings.publishedFileNames[file.path];
+				void this.saveSettings();
+			})
+		);
 	}
 
 	github(): GithubClient {
@@ -61,7 +81,15 @@ export default class PublishToGithubPlugin extends Plugin {
 	async loadSettings() {
 		// A deep copy, so the lists the settings tab edits in place are never the
 		// defaults' own: a fresh install would otherwise be editing DEFAULT_SETTINGS.
-		this.settings = Object.assign(structuredClone(DEFAULT_SETTINGS), await this.loadData());
+		const saved = await this.loadData();
+		this.settings = Object.assign(structuredClone(DEFAULT_SETTINGS), saved);
+
+		// Earlier versions always published under the note's own name. Keep that for
+		// an existing install, or every republish would land as a second copy under
+		// the new slugged name; new installs get the slug.
+		if (saved && typeof saved === "object" && !("fileNameTemplate" in saved)) {
+			this.settings.fileNameTemplate = "{{title}}.md";
+		}
 
 		// Older versions stored the removal list as one newline-joined string.
 		const removals = this.settings.propertiesToRemove as unknown;
@@ -100,7 +128,8 @@ export default class PublishToGithubPlugin extends Plugin {
 		}
 
 		const note = parseNote(content);
-		const { properties, removed } = resolveProperties(note.frontmatter, this.settings);
+		const expand = (template: string) => expandPlaceholders(template, { title: file.basename });
+		const { properties, removed } = resolveProperties(note.frontmatter, this.settings, expand);
 
 		// Embeds are collected from the body that will actually be published, so
 		// images sitting below the break, or inside a comment, are never uploaded.
@@ -127,7 +156,8 @@ export default class PublishToGithubPlugin extends Plugin {
 
 		const context: ReviewContext = {
 			sourcePath: file.path,
-			fileName: defaultFileName(file.path),
+			fileName: this.defaultFileName(file, expand),
+			fileNameRemembered: file.path in this.settings.publishedFileNames,
 			repoLabel: `${this.settings.owner}/${this.settings.repo}`,
 			branch: this.settings.branch,
 			resolvePath: (fileName) => buildTargetPath(file.path, fileName, this.settings),
@@ -351,6 +381,7 @@ export default class PublishToGithubPlugin extends Plugin {
 
 			if (files.length === 0) {
 				new Notice(`Nothing to publish: ${targetPath} and its attachments are already up to date.`, 6000);
+				await this.rememberFileName(file, context.fileName).catch(() => undefined);
 				return;
 			}
 
@@ -376,6 +407,10 @@ export default class PublishToGithubPlugin extends Plugin {
 			new Notice(`Publish failed, and nothing was committed: ${(error as Error).message}`, 10000);
 			throw error;
 		}
+
+		// After the commit, and outside its error handling: failing to remember the
+		// name must not be reported as a failed publish.
+		await this.rememberFileName(file, context.fileName).catch(() => undefined);
 	}
 
 	/**
@@ -390,6 +425,26 @@ export default class PublishToGithubPlugin extends Plugin {
 	}
 
 	/**
+	 * The filename a note is offered under: the one it was last published under,
+	 * or else the default filename template filled in for it.
+	 */
+	private defaultFileName(file: TFile, expand: (template: string) => string): string {
+		const remembered = this.settings.publishedFileNames[file.path];
+		if (remembered) return remembered;
+
+		const template = this.settings.fileNameTemplate.trim() || DEFAULT_SETTINGS.fileNameTemplate;
+		const name = normaliseFileName(expand(template));
+		return name.length > 0 ? name : defaultFileName(file.path);
+	}
+
+	private async rememberFileName(file: TFile, fileName: string): Promise<void> {
+		const name = normaliseFileName(fileName);
+		if (this.settings.publishedFileNames[file.path] === name) return;
+		this.settings.publishedFileNames[file.path] = name;
+		await this.saveSettings();
+	}
+
+	/**
 	 * The template fills the summary line. When a commit carries more than the post
 	 * alone, the files it touches are listed beneath, so the history says which
 	 * images went up with which post.
@@ -400,14 +455,7 @@ export default class PublishToGithubPlugin extends Plugin {
 		contents: { post: "new" | "changed" | null; attachments: PlannedUpload[] }
 	): string {
 		const template = this.settings.commitMessageTemplate.trim() || DEFAULT_SETTINGS.commitMessageTemplate;
-		const values: Record<string, string> = {
-			filename: file.basename,
-			path: targetPath,
-			date: moment().format("YYYY-MM-DD"),
-		};
-		// A replacer function, not a replacement string: a name like "Cost $& more"
-		// must not be read as a replacement pattern.
-		const summary = template.replace(/\{\{(filename|path|date)\}\}/g, (_match, key: string) => values[key]);
+		const summary = expandPlaceholders(template, { title: file.basename, extra: { path: targetPath } });
 
 		if (contents.attachments.length === 0) return summary;
 

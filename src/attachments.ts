@@ -186,7 +186,7 @@ export function postAttachmentFolder(postPath: string): string {
  * entirely in a non-Latin script, falls back to a short hash of the original so
  * that two such names still end up apart.
  */
-function slugOrHash(text: string, fallback: string): string {
+export function slugOrHash(text: string, fallback: string): string {
 	const slug = text
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, "-")

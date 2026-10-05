@@ -73,7 +73,9 @@ export function parseNote(content: string): ParsedNote {
  */
 export function resolveProperties(
 	frontmatter: Record<string, unknown>,
-	settings: PublishToGithubSettings
+	settings: PublishToGithubSettings,
+	/** Fills in any {{placeholders}} in a configured default value. */
+	expand: (template: string) => string = (template) => template
 ): { properties: OutgoingProperty[]; removed: OutgoingProperty[] } {
 	const toRemove = new Set(settings.propertiesToRemove);
 	const configured = new Map(
@@ -87,7 +89,7 @@ export function resolveProperties(
 	for (const [key, value] of Object.entries(frontmatter)) {
 		const config = configured.get(key);
 		if (config) {
-			properties.push(resolveConfigured(config, frontmatter));
+			properties.push(resolveConfigured(config, frontmatter, expand));
 		} else if (toRemove.has(key)) {
 			removed.push(noteProperty(key, value));
 		} else {
@@ -98,18 +100,22 @@ export function resolveProperties(
 	// Configured properties the note does not have are appended in settings order.
 	for (const [key, config] of configured) {
 		if (key in frontmatter) continue;
-		properties.push(resolveConfigured(config, frontmatter));
+		properties.push(resolveConfigured(config, frontmatter, expand));
 	}
 
 	return { properties, removed };
 }
 
-function resolveConfigured(property: AddedProperty, frontmatter: Record<string, unknown>): OutgoingProperty {
+function resolveConfigured(
+	property: AddedProperty,
+	frontmatter: Record<string, unknown>,
+	expand: (template: string) => string
+): OutgoingProperty {
 	const hasExisting = property.key in frontmatter;
 	const value =
 		hasExisting && property.keepExistingValue
 			? coerceExisting(frontmatter[property.key], property.type)
-			: parseValue(property.defaultValue, property.type);
+			: parseValue(expand(property.defaultValue), property.type);
 
 	return {
 		key: property.key,

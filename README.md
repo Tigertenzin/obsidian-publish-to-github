@@ -51,8 +51,12 @@ works the same way. Point the target folder at the site's posts directory (`src/
 Edits in the review window apply to that one publish. Nothing there is written back to the
 note or to the settings.
 
-The **filename** field starts as the note's own name and is yours to change — posts are
-usually titled one way in the vault and slugged another on the site. It accepts a name with
+The **filename** field starts from the *Default filename* setting — `{{slug}}.md` on a new
+install, so `My Post` is offered as `my-post.md` — and is yours to change, since posts are
+usually titled one way in the vault and slugged another on the site. Once a note has been
+published, it is offered the filename it was last published under instead (marked *as last
+published*), so republishing goes back to the same file even if the template or the date has
+changed since; this follows the note if you rename or move it in the vault. It accepts a name with
 or without `.md` — `.mdx` and `.markdown` are kept too, and anything else, like the `.2` in
 `Release 1.2`, gets `.md` added — and a name containing slashes nests the post further inside
 the target folder. The full path it resolves to is shown directly underneath.
@@ -196,8 +200,20 @@ so the diff you see is against the newer version before you publish over it.
 | Branch | Branch the commit lands on. Must already exist. |
 | Personal access token | A fine-grained token limited to the one repository, with **Contents: read and write**. See below. |
 | Target folder | Folder inside the repository to publish into — the site's posts folder. Focus the field to browse the folders that exist on the branch. Empty means the repository root. |
+| Default filename | The filename a note is first offered under, with placeholders (see below). `{{slug}}.md` on a new install; an install upgraded from an earlier version keeps `{{title}}.md`, the note's own name, so existing posts are not republished under a new name. |
 | Mirror vault folder structure | Append the note's folder path inside the vault to the target folder. |
-| Commit message | Supports `{{filename}}`, `{{path}}` and `{{date}}`. |
+| Commit message | The commit's summary line, with placeholders, plus `{{path}}` for the post's path in the repository. |
+
+**Placeholders**, in the default filename, the commit message and default property values:
+
+| Placeholder | Becomes |
+| --- | --- |
+| `{{title}}`, `{{filename}}` | The note's name: `My Post` |
+| `{{slug}}` | The note's name, URL-safe: `my-post` |
+| `{{date}}`, `{{time}}`, `{{datetime}}` | Now: `2026-10-05`, `14:30`, `2026-10-05T14:30` |
+| `{{date:FORMAT}}` | Now, in a format of your own, as `{{date:MMMM D, YYYY}}` → `October 5, 2026`. Takes [Moment.js format tokens](https://momentjs.com/docs/#/displaying/format/), the same as Obsidian's date settings. |
+
+An unrecognised placeholder is left as written.
 
 `Test` checks that the token can reach both the repository and the branch.
 
@@ -255,7 +271,8 @@ Each row is `name · type · default value · keep existing value`.
 
 - **type** is one of text, number, checkbox, date, date & time, or list, and decides which input
   the review window shows.
-- **default value** prefills that input.
+- **default value** prefills that input, and can use placeholders — `{{date}}` for a date
+  property, say, or `{{slug}}` for a slug.
 - **keep existing value** on: when the note already carries the property, its own value is used
   instead of the default. Off: the default always wins, which is how you overwrite a property.
 

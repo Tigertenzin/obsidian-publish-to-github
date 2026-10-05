@@ -85,6 +85,8 @@ export interface ReviewContext {
 	sourcePath: string;
 	/** Filename inside the repository, edited in place by the review window. */
 	fileName: string;
+	/** True when the filename is the one this note was last published under. */
+	fileNameRemembered: boolean;
 	repoLabel: string;
 	branch: string;
 	/** Turns the filename as typed into the full path inside the repository. */
@@ -228,6 +230,9 @@ export class ReviewModal extends Modal {
 				this.scheduleLookup();
 			});
 		input.inputEl.addClass("ptg-filename-input");
+		if (this.context.fileNameRemembered) {
+			row.createSpan({ cls: "ptg-origin", text: "as last published" });
+		}
 
 		this.pathEl = summary.createDiv({ cls: "ptg-summary-row ptg-path-row" });
 		this.renderPath();

@@ -34,6 +34,8 @@ export interface PublishToGithubSettings {
 	branch: string;
 	token: string;
 	targetFolder: string;
+	/** The filename a note is first offered under, with {{placeholders}}. */
+	fileNameTemplate: string;
 	preserveFolderStructure: boolean;
 	commitMessageTemplate: string;
 
@@ -57,6 +59,12 @@ export interface PublishToGithubSettings {
 	groupAttachmentsByPost: boolean;
 	attachmentUrlPrefix: string;
 	imageSizeStyle: ImageSizeStyle;
+
+	/**
+	 * The filename each note was last published under, by vault path, so a
+	 * republish goes back to the same file. Not shown in the settings tab.
+	 */
+	publishedFileNames: Record<string, string>;
 }
 
 export const DEFAULT_SETTINGS: PublishToGithubSettings = {
@@ -65,6 +73,7 @@ export const DEFAULT_SETTINGS: PublishToGithubSettings = {
 	branch: "main",
 	token: "",
 	targetFolder: "",
+	fileNameTemplate: "{{slug}}.md",
 	preserveFolderStructure: false,
 	commitMessageTemplate: "Publish {{filename}}",
 
@@ -83,7 +92,13 @@ export const DEFAULT_SETTINGS: PublishToGithubSettings = {
 	groupAttachmentsByPost: true,
 	attachmentUrlPrefix: "/posts/attachments",
 	imageSizeStyle: "html",
+
+	publishedFileNames: {},
 };
+
+/** What the placeholders are, for the settings that take them. */
+const PLACEHOLDER_HELP =
+	"{{title}}, {{slug}}, {{date}}, {{time}} and {{datetime}}; dates take a format, as {{date:MMMM D, YYYY}}.";
 
 export class PublishToGithubSettingTab extends PluginSettingTab {
 	plugin: PublishToGithubPlugin;
@@ -290,6 +305,21 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
+			.setName("Default filename")
+			.setDesc(
+				`The filename a note is first offered under in the review window, where it can still be changed. After that, a note is offered the filename it was last published under. Supports ${PLACEHOLDER_HELP}`
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder("{{slug}}.md")
+					.setValue(this.plugin.settings.fileNameTemplate)
+					.onChange(async (value) => {
+						this.plugin.settings.fileNameTemplate = value.trim();
+						await this.save();
+					})
+			);
+
+		new Setting(containerEl)
 			.setName("Mirror vault folder structure")
 			.setDesc("Append the note's folder path inside the vault to the target folder.")
 			.addToggle((toggle) =>
@@ -301,7 +331,7 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Commit message")
-			.setDesc("Supports {{filename}}, {{path}} and {{date}}.")
+			.setDesc(`Supports {{path}}, the file's path in the repository, as well as ${PLACEHOLDER_HELP}`)
 			.addText((text) =>
 				text
 					.setPlaceholder("Publish {{filename}}")
@@ -336,7 +366,7 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Properties to add")
 			.setDesc(
-				"Written into the published copy. You confirm or edit each value in the review window before publishing."
+				`Written into the published copy. You confirm or edit each value in the review window before publishing. Default values support ${PLACEHOLDER_HELP}`
 			)
 			.setHeading()
 			.addButton((button) =>
