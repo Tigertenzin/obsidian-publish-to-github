@@ -345,7 +345,10 @@ export function buildOutput(
 	}
 
 	const { body } = applyBreak(note.body, settings);
-	const trimmedBody = body.replace(/\s+$/, "");
+	// Blank lines at either end are dropped, so the body always sits exactly one
+	// blank line below the frontmatter. Only whole blank lines go from the start:
+	// leading spaces on the first line of text may be indentation that matters.
+	const trimmedBody = body.replace(/^(?:[ \t]*\r?\n)+/, "").replace(/\s+$/, "");
 
 	if (Object.keys(frontmatter).length === 0) {
 		return trimmedBody.length > 0 ? `${trimmedBody}\n` : "";
