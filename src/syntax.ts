@@ -105,7 +105,7 @@ function linkLabel(target: string): string {
 }
 
 /**
- * Runs a replacement over every match that does not start inside code. The
+ * Runs a replacement over every match that neither starts nor ends inside code. The
  * callback returns the replacement, or null to leave the match as it is.
  */
 function replaceOutsideCode(
@@ -125,7 +125,8 @@ function replaceOutsideCode(
 	let last = 0;
 	for (const match of body.matchAll(pattern)) {
 		const index = match.index ?? 0;
-		if (inCode(index)) continue;
+		// Neither end may sit in code: "==a. `==b==`" is not a highlight of "a. `".
+		if (inCode(index) || inCode(index + match[0].length - 1)) continue;
 
 		const result = replace(match[0], index, body, match.slice(1));
 		if (result === null) continue;
