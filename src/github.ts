@@ -3,6 +3,9 @@ import type { PublishToGithubSettings } from "./settings";
 
 const API_ROOT = "https://api.github.com";
 
+const CONFLICT_MESSAGE =
+	"The file changed on GitHub after you reviewed it. Go Back and continue to the preview again to see the latest version before publishing.";
+
 export interface ConnectionInfo {
 	fullName: string;
 	branch: string;
@@ -166,6 +169,12 @@ export class GithubClient {
 			...(sha ? { sha } : {}),
 		});
 
+		// Committing with no SHA to a path that is now taken: someone created the
+		// file after it was checked. GitHub reports this as a 422, but it is the same
+		// conflict as a stale SHA and deserves the same explanation.
+		if (response.status === 422 && sha === null && /\bsha\b/i.test(String(response.json?.message ?? ""))) {
+			throw new Error(CONFLICT_MESSAGE);
+		}
 		this.assertOk(response, "publish the file");
 
 		return {
@@ -211,7 +220,7 @@ export class GithubClient {
 			throw new Error(`GitHub refused the request (403). ${detail}`);
 		}
 		if (response.status === 409) {
-			throw new Error("The file changed on GitHub since it was read. Try publishing again.");
+			throw new Error(CONFLICT_MESSAGE);
 		}
 		if (response.status === 422) {
 			throw new Error(`GitHub could not process the request (422). ${detail}`);

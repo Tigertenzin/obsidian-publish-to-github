@@ -146,7 +146,9 @@ which the window says plainly before letting you replace it.
 
 The commit is made against the exact version the diff was built from. If the file changes on
 GitHub between the diff and the confirmation, the commit is rejected rather than quietly
-overwriting the newer version, and the plugin tells you to publish again.
+overwriting the newer version. The same goes for a file someone else created at the path after
+it was checked. Go `Back` and continue to the preview again: the plugin reads the file afresh,
+so the diff you see is against the newer version before you publish over it.
 
 ## Settings
 

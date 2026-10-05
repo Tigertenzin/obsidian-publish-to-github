@@ -112,6 +112,9 @@ export default class PublishToGithubPlugin extends Plugin {
 			lookups.set(path, pending);
 			return pending;
 		};
+		const forget = (path: string): void => {
+			lookups.delete(path);
+		};
 
 		const context: ReviewContext = {
 			sourcePath: file.path,
@@ -121,6 +124,7 @@ export default class PublishToGithubPlugin extends Plugin {
 			resolvePath: (fileName) => buildTargetPath(file.path, fileName, this.settings),
 			attachmentPath: (attachmentName) => this.attachmentPath(file.path, context.fileName, attachmentName),
 			lookup,
+			forget,
 			properties,
 			removed,
 			attachments,
@@ -302,6 +306,9 @@ export default class PublishToGithubPlugin extends Plugin {
 				6000
 			);
 		} catch (error) {
+			// Whatever is at the path may have moved on; going Back must read it afresh
+			// rather than diff and commit against the version that was just rejected.
+			context.forget(targetPath);
 			new Notice(`Publish failed: ${(error as Error).message}`, 10000);
 			throw error;
 		}

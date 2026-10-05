@@ -67,6 +67,8 @@ export interface ReviewContext {
 	attachmentPath: (attachmentName: string) => string;
 	/** Reads whatever is at a path, cached per path across both windows. */
 	lookup: (path: string) => Promise<RemoteFile | null>;
+	/** Drops a cached lookup, so the next one reads the path from GitHub again. */
+	forget: (path: string) => void;
 	/** Every property the published copy will carry. Edited in place. */
 	properties: OutgoingProperty[];
 	/** Properties the settings stripped, offered back for restoring. Edited in place. */
