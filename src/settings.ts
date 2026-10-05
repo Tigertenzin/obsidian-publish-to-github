@@ -120,13 +120,20 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 		this.suggests.push(new TextSuggest(input, source));
 	}
 
-	/** Folder names in the repository, loaded lazily and reused. */
+	/**
+	 * Folder names in the repository, loaded lazily and reused. A failed load is
+	 * not kept, so focusing the field again — say, once the token is in — retries.
+	 */
 	private repoFolders(): Promise<string[]> {
 		if (!this.folders) {
-			this.folders = this.plugin
+			const pending = this.plugin
 				.github()
 				.listFolders()
-				.catch(() => []);
+				.catch(() => {
+					if (this.folders === pending) this.folders = null;
+					return [];
+				});
+			this.folders = pending;
 		}
 		return this.folders;
 	}
@@ -203,6 +210,8 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.owner)
 					.onChange(async (value) => {
 						this.plugin.settings.owner = value.trim();
+						// The folder list belongs to the old connection.
+						this.folders = null;
 						await this.save();
 					})
 			);
@@ -215,6 +224,8 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.repo)
 					.onChange(async (value) => {
 						this.plugin.settings.repo = value.trim();
+						// The folder list belongs to the old connection.
+						this.folders = null;
 						await this.save();
 					})
 			);
@@ -228,6 +239,8 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.branch)
 					.onChange(async (value) => {
 						this.plugin.settings.branch = value.trim();
+						// The folder list belongs to the old connection.
+						this.folders = null;
 						await this.save();
 					})
 			);
@@ -243,6 +256,8 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.token)
 					.onChange(async (value) => {
 						this.plugin.settings.token = value.trim();
+						// The folder list belongs to the old connection.
+						this.folders = null;
 						await this.save();
 					});
 			});
