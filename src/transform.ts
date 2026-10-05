@@ -221,12 +221,22 @@ export interface BreakResult {
 	droppedLines: number;
 	/** The content the break keeps out of the published copy. */
 	dropped: string;
+	/**
+	 * Body lines in the published part that match the marker but were passed over
+	 * because markdown reads them as a heading underline, so the review window can
+	 * say why they did not cut.
+	 */
+	headingUnderlines: number[];
 }
 
 /**
  * Drops everything from the first line that matches the break marker onwards.
  * Reports what was dropped so the review window can show it — the default marker
  * is a horizontal rule, which is easy to use mid-note without meaning to cut.
+ *
+ * A matching line is not a break when it is inside a fenced code block, or when it
+ * sits directly under a line of text, where markdown reads "---" or "===" as the
+ * underline of a heading rather than as a rule.
  */
 export function applyBreak(body: string, settings: PublishToGithubSettings): BreakResult {
 	const marker = settings.breakMarker.trim();
@@ -238,12 +248,42 @@ export function applyBreak(body: string, settings: PublishToGithubSettings): Bre
 		keptLines: countLines(lines),
 		droppedLines: 0,
 		dropped: "",
+		headingUnderlines: [],
 	};
 
 	if (!settings.breakEnabled || marker.length === 0) return untouched;
 
-	const index = lines.findIndex((line) => line.trim() === marker);
-	if (index === -1) return untouched;
+	const underlineMarker = /^(?:-+|=+)$/.test(marker);
+	const headingUnderlines: number[] = [];
+	let fence: string | null = null;
+	let index = -1;
+
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i];
+
+		const fenceMatch = line.match(/^[ \t]{0,3}(`{3,}|~{3,})/);
+		if (fence === null && fenceMatch) {
+			fence = fenceMatch[1];
+			continue;
+		}
+		if (fence !== null) {
+			// A fence closes on a run of the same character, at least as long.
+			if (fenceMatch && fenceMatch[1][0] === fence[0] && fenceMatch[1].length >= fence.length && line.trim() === fenceMatch[1]) {
+				fence = null;
+			}
+			continue;
+		}
+
+		if (line.trim() !== marker) continue;
+		if (underlineMarker && i > 0 && underlinesText(lines[i - 1])) {
+			headingUnderlines.push(i);
+			continue;
+		}
+		index = i;
+		break;
+	}
+
+	if (index === -1) return { ...untouched, headingUnderlines };
 
 	const kept = lines.slice(0, index);
 	const dropped = lines.slice(index);
@@ -255,7 +295,21 @@ export function applyBreak(body: string, settings: PublishToGithubSettings): Bre
 		keptLines: kept.length,
 		droppedLines: countLines(dropped),
 		dropped: dropped.join("\n"),
+		headingUnderlines,
 	};
+}
+
+/**
+ * Whether a line is ordinary paragraph text, which a "---" or "===" directly below
+ * turns into a heading. Blank lines, list items, headings, quotes, table rows,
+ * fences and indented code cannot be underlined, so a rule after them stays a rule.
+ */
+function underlinesText(previous: string): boolean {
+	if (previous.trim().length === 0) return false;
+	if (/^( {4}|\t)/.test(previous)) return false;
+	// Itself a rule or an underline: what follows is another rule.
+	if (/^(?:[-_*=][ \t]*)+$/.test(previous.trim())) return false;
+	return !/^[ ]{0,3}(?:[-*+][ \t]|\d+[.)][ \t]|#{1,6}(?:[ \t]|$)|>|\||`{3,}|~{3,}|<)/.test(previous);
 }
 
 /** Counts real lines, ignoring the empty entry a trailing newline leaves behind. */

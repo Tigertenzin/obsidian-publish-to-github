@@ -366,6 +366,18 @@ export class ReviewModal extends Modal {
 	 */
 	private renderBreakWarning(contentEl: HTMLElement): void {
 		const result = this.context.breakResult;
+
+		// A "---" under a line of text is a heading underline, so it did not cut;
+		// say so, in case it was meant as the break.
+		if (result.headingUnderlines.length > 0) {
+			const lines = result.headingUnderlines.map((line) => line + 1);
+			const many = lines.length > 1;
+			contentEl.createDiv({
+				cls: "ptg-note",
+				text: `The break marker on body line${many ? "s" : ""} ${lines.join(", ")} sit${many ? "" : "s"} directly under a line of text, so markdown reads ${many ? "them" : "it"} as a heading underline and ${many ? "they were" : "it was"} not treated as a break. Put a blank line above a marker you meant as the break.`,
+			});
+		}
+
 		if (!result.trimmed) return;
 
 		const heavy = result.droppedLines > result.keptLines;

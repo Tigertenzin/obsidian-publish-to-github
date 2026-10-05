@@ -256,6 +256,11 @@ below the rule and publish only what sits above it. The marker is matched agains
 ignoring surrounding whitespace, and is only searched in the body — the frontmatter delimiters
 are never mistaken for it.
 
+Two kinds of matching line are not breaks. A marker inside a fenced code block is just code.
+And a `---` (or `===`) directly under a line of text is how markdown underlines a heading, so
+it is not a rule at all: write a blank line above a `---` you mean as the break. When a marker
+is passed over as a heading underline, the review window says so.
+
 **A horizontal rule is also an ordinary way to separate sections**, and the break takes the
 *first* one it finds. A note that uses `---` between sections will be cut at the first of them.
 So the review window always reports which line the marker was found on, how many lines are
