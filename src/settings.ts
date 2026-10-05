@@ -1,5 +1,6 @@
 import { App, PluginSettingTab, Setting, Notice } from "obsidian";
 import type { ImageSizeStyle } from "./attachments";
+import type { HighlightStyle, NoteLinkStyle } from "./syntax";
 import type PublishToGithubPlugin from "./main";
 import { TextSuggest } from "./suggest";
 import { buildVaultIndex, type VaultIndex } from "./vault";
@@ -44,6 +45,11 @@ export interface PublishToGithubSettings {
 	breakEnabled: boolean;
 	breakMarker: string;
 
+	// Obsidian syntax
+	noteLinkStyle: NoteLinkStyle;
+	stripComments: boolean;
+	highlightStyle: HighlightStyle;
+
 	// Attachments
 	uploadAttachments: boolean;
 	attachmentFolder: string;
@@ -67,6 +73,10 @@ export const DEFAULT_SETTINGS: PublishToGithubSettings = {
 
 	breakEnabled: true,
 	breakMarker: "---",
+
+	noteLinkStyle: "text",
+	stripComments: true,
+	highlightStyle: "mark",
 
 	uploadAttachments: true,
 	attachmentFolder: "posts/attachments",
@@ -100,6 +110,7 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 		this.renderPropertiesToAdd(containerEl);
 		this.renderPropertiesToRemove(containerEl);
 		this.renderContentBreak(containerEl);
+		this.renderSyntax(containerEl);
 		this.renderAttachments(containerEl);
 	}
 
@@ -495,6 +506,51 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.breakMarker)
 					.onChange(async (value) => {
 						this.plugin.settings.breakMarker = value;
+						await this.save();
+					})
+			);
+	}
+
+	private renderSyntax(containerEl: HTMLElement) {
+		new Setting(containerEl).setName("Obsidian syntax").setHeading();
+
+		new Setting(containerEl)
+			.setName("Links to other notes")
+			.setDesc(
+				"[[Wikilinks]], note embeds and markdown links to .md files point at notes the site does not have. The review window lists every one it converts."
+			)
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("text", "Publish as plain text")
+					.addOption("keep", "Leave as written")
+					.setValue(this.plugin.settings.noteLinkStyle)
+					.onChange(async (value) => {
+						this.plugin.settings.noteLinkStyle = value as NoteLinkStyle;
+						await this.save();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Remove comments")
+			.setDesc("Leave %%comments%% out of the published copy, inline or spanning several lines.")
+			.addToggle((toggle) =>
+				toggle.setValue(this.plugin.settings.stripComments).onChange(async (value) => {
+					this.plugin.settings.stripComments = value;
+					await this.save();
+				})
+			);
+
+		new Setting(containerEl)
+			.setName("Highlights")
+			.setDesc("How ==highlighted text== is published.")
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("mark", "As a <mark> tag")
+					.addOption("strip", "As plain text")
+					.addOption("keep", "Leave as written")
+					.setValue(this.plugin.settings.highlightStyle)
+					.onChange(async (value) => {
+						this.plugin.settings.highlightStyle = value as HighlightStyle;
 						await this.save();
 					})
 			);

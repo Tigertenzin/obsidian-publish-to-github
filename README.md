@@ -129,6 +129,22 @@ screen-reader label, or the PDF's link text.
 transclusions and non-media embeds like `![[Some Note#Heading]]` or `.base` files, and
 anything inside a fenced or inline code block.
 
+## Obsidian syntax
+
+Some of what Obsidian understands means nothing on a website, so the published copy converts it:
+
+- **Links to other notes** — `[[My Other Post]]`, `[[My Other Post|this post]]`, note embeds
+  like `![[Other note]]`, and markdown links to `.md` files — point at notes the site does not
+  have, so they are published as plain text: the link's display text, or else the note's name.
+  The review window lists every link it converts, in case one was meant to point at a page on
+  your site; replace those with ordinary links in the note.
+- **Comments** (`%% … %%`, inline or spanning lines) are left out. They are removed before
+  images are collected, so an image inside a comment is not uploaded.
+- **Highlights** (`==text==`) become `<mark>text</mark>`.
+
+Code blocks and inline code are never touched. Each conversion can be changed or turned off
+under *Obsidian syntax* in the settings.
+
 ## Suggestions
 
 Fields that name something which already exists offer it rather than asking you to remember it.
@@ -277,6 +293,14 @@ about to be dropped, and offers the dropped content for inspection; when the cut
 more than half the note, it says so as a warning rather than a note. If your notes use `---`
 freely, set the marker to something that cannot collide — `%%publish-break%%` uses Obsidian's
 comment syntax and stays invisible in reading view.
+
+### Obsidian syntax
+
+| Setting | Meaning |
+| --- | --- |
+| Links to other notes | Publish them as plain text (default), or leave them as written for sites that understand wikilinks. |
+| Remove comments | Leave `%%comments%%` out of the published copy. On by default. |
+| Highlights | Publish `==text==` as a `<mark>` tag (default), as plain text, or as written. |
 
 ### Attachments
 

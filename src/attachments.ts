@@ -93,7 +93,7 @@ export function mediaKind(path: string): MediaKind | null {
 	return match ? MEDIA_KINDS[match[1]] ?? null : null;
 }
 
-function isExternal(target: string): boolean {
+export function isExternal(target: string): boolean {
 	return /^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("//");
 }
 
@@ -114,7 +114,7 @@ function parseWidth(display: string | null): number | null {
 	return match ? Number(match[1]) : null;
 }
 
-function decodeTarget(target: string): string {
+export function decodeTarget(target: string): string {
 	try {
 		return decodeURIComponent(target);
 	} catch {
@@ -123,7 +123,7 @@ function decodeTarget(target: string): string {
 }
 
 /** Spans of fenced blocks and inline code, where embeds are just text. */
-function codeRanges(body: string): Array<[number, number]> {
+export function codeRanges(body: string): Array<[number, number]> {
 	const ranges: Array<[number, number]> = [];
 
 	for (const match of body.matchAll(/^[ \t]*(`{3,}|~{3,})[^\n]*\n[\s\S]*?^[ \t]*\1[^\n]*$/gm)) {

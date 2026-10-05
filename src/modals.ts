@@ -14,6 +14,7 @@ import {
 import { attachmentUrl, cleanAttachmentName, mediaKind, type Embed, type MediaKind } from "./attachments";
 import { diffLines, type DiffLine, type DiffResult } from "./diff";
 import { TextSuggest } from "./suggest";
+import type { NoteLink } from "./syntax";
 import type { VaultIndex } from "./vault";
 import type { RemoteFile } from "./github";
 import { PROPERTY_TYPE_LABELS, type PropertyType } from "./settings";
@@ -105,6 +106,10 @@ export interface ReviewContext {
 	attachments: Attachment[];
 	attachmentUrlPrefix: string;
 	breakResult: BreakResult;
+	/** The body to publish: cut at the break, with comments already removed when asked. */
+	body: string;
+	/** Links to other notes that will be published as plain text. */
+	noteLinks: NoteLink[];
 	frontmatterError: string | null;
 	/** Property names and values already used in the vault, for autocomplete. */
 	index: VaultIndex;
@@ -185,6 +190,7 @@ export class ReviewModal extends Modal {
 		this.runLookup();
 
 		this.renderBreakWarning(contentEl);
+		this.renderNoteLinks(contentEl);
 
 		new Setting(contentEl)
 			.addButton((button) => button.setButtonText("Cancel").onClick(() => this.close()))
@@ -421,6 +427,28 @@ export class ReviewModal extends Modal {
 		details.createEl("summary", { text: "Show what will be dropped" });
 		const pre = details.createEl("pre", { cls: "ptg-preview ptg-break-preview" });
 		pre.createEl("code", { text: result.dropped });
+	}
+
+	/**
+	 * Links to other notes have nowhere to point on the site, so they are published
+	 * as plain text. Listed in full, in case one was meant to link to a page there.
+	 */
+	private renderNoteLinks(contentEl: HTMLElement): void {
+		const links = this.context.noteLinks;
+		if (links.length === 0) return;
+
+		const box = contentEl.createDiv({ cls: "ptg-warning" });
+		box.createDiv({
+			cls: "ptg-break-headline",
+			text: `${links.length} link${links.length === 1 ? "" : "s"} to other notes will be published as plain text. If any should link to a page on your site, replace ${links.length === 1 ? "it" : "them"} with a regular link in the note.`,
+		});
+
+		const details = box.createEl("details", { cls: "ptg-break-details" });
+		details.createEl("summary", { text: "Show the links" });
+		const list = details.createEl("ul", { cls: "ptg-removed-list" });
+		for (const link of links) {
+			list.createEl("li", { text: `${link.raw} → ${link.text}` });
+		}
 	}
 
 	private refresh(): void {

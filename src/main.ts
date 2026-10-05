@@ -20,6 +20,7 @@ import {
 	PublishToGithubSettingTab,
 	type PublishToGithubSettings,
 } from "./settings";
+import { convertHighlights, findNoteLinks, noteLinksToText, stripComments } from "./syntax";
 import { buildVaultIndex } from "./vault";
 import {
 	applyBreak,
@@ -102,9 +103,10 @@ export default class PublishToGithubPlugin extends Plugin {
 		const { properties, removed } = resolveProperties(note.frontmatter, this.settings);
 
 		// Embeds are collected from the body that will actually be published, so
-		// images sitting below the break are never uploaded.
+		// images sitting below the break, or inside a comment, are never uploaded.
 		const breakResult = applyBreak(note.body, this.settings);
-		const attachments = this.collectAttachments(file, breakResult.body);
+		const body = this.settings.stripComments ? stripComments(breakResult.body) : breakResult.body;
+		const attachments = this.collectAttachments(file, body);
 
 		// One lookup per path, shared by both windows, so stepping back and forth
 		// and retyping a name does not re-query GitHub for a path already seen.
@@ -137,6 +139,8 @@ export default class PublishToGithubPlugin extends Plugin {
 			attachments,
 			attachmentUrlPrefix: this.settings.attachmentUrlPrefix,
 			breakResult,
+			body,
+			noteLinks: this.settings.noteLinkStyle === "text" ? findNoteLinks(body) : [],
 			frontmatterError: note.frontmatterError,
 			index: buildVaultIndex(this.app),
 		};
@@ -251,7 +255,10 @@ export default class PublishToGithubPlugin extends Plugin {
 		}).open();
 	}
 
-	/** The note body with every embed rewritten to point at its uploaded copy. */
+	/**
+	 * The body as published: embeds rewritten to point at their uploaded copies,
+	 * then links to other notes and highlights converted for the site.
+	 */
 	private publishedBody(context: ReviewContext): string {
 		const replacements = context.attachments
 			.filter((attachment) => !attachment.missing && attachment.fileName.length > 0)
@@ -266,7 +273,9 @@ export default class PublishToGithubPlugin extends Plugin {
 				),
 			}));
 
-		return rewriteBody(context.breakResult.body, replacements);
+		let body = rewriteBody(context.body, replacements);
+		if (this.settings.noteLinkStyle === "text") body = noteLinksToText(body);
+		return convertHighlights(body, this.settings.highlightStyle);
 	}
 
 	private async openPreview(file: TFile, context: ReviewContext) {
