@@ -338,7 +338,8 @@ export function defaultFileName(vaultPath: string): string {
 /**
  * Cleans up a filename typed in the review window. Slashes are kept, so a name
  * can nest the post a level deeper, but the path cannot climb out of the target
- * folder and always ends in .md.
+ * folder and always ends in a markdown extension — .md unless .mdx or
+ * .markdown was typed.
  */
 export function normaliseFileName(name: string): string {
 	const cleaned = name
@@ -348,7 +349,8 @@ export function normaliseFileName(name: string): string {
 		.join("/");
 
 	if (cleaned.length === 0) return "";
-	return /\.[a-z0-9]+$/i.test(cleaned) ? cleaned : `${cleaned}.md`;
+	// Only a markdown extension counts: in "Release 1.2" the ".2" is part of the name.
+	return /\.(md|mdx|markdown)$/i.test(cleaned) ? cleaned : `${cleaned}.md`;
 }
 
 /**

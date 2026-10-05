@@ -53,8 +53,9 @@ note or to the settings.
 
 The **filename** field starts as the note's own name and is yours to change — posts are
 usually titled one way in the vault and slugged another on the site. It accepts a name with
-or without `.md`, and a name containing slashes nests the post further inside the target
-folder. The full path it resolves to is shown directly underneath.
+or without `.md` — `.mdx` and `.markdown` are kept too, and anything else, like the `.2` in
+`Release 1.2`, gets `.md` added — and a name containing slashes nests the post further inside
+the target folder. The full path it resolves to is shown directly underneath.
 
 While the review window is open, the plugin checks that path in the repository and reports
 what it finds: a new file, or one that is already there and would be replaced. Editing the
