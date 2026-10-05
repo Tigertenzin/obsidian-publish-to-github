@@ -919,6 +919,8 @@ export class PreviewModal extends Modal {
 		try {
 			await this.options.onPublish();
 			this.close();
+		} catch {
+			// Already reported in a notice; the window stays open so the user can go Back.
 		} finally {
 			button.setDisabled(false);
 			button.setButtonText("Publish");
@@ -981,10 +983,13 @@ export class ConfirmOverwriteModal extends Modal {
 						button.setButtonText("Publishing…");
 						try {
 							await this.options.onConfirm();
-							this.close();
+						} catch {
+							// Already reported in a notice. Closing returns to the preview,
+							// whose Back button is how a conflict is resolved.
 						} finally {
 							button.setDisabled(false);
 							button.setButtonText("Overwrite");
+							this.close();
 						}
 					})
 			);
