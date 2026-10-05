@@ -41,11 +41,19 @@ jobs:
 
       - run: npm test
 
+      # Hand-written notes in release-notes/<version>.md when there are any,
+      # otherwise GitHub's list of the changes since the last release.
       - name: Publish the release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          notes_file="release-notes/$GITHUB_REF_NAME.md"
+          if [ -f "$notes_file" ]; then
+            notes=(--notes-file "$notes_file")
+          else
+            notes=(--generate-notes)
+          fi
           gh release create "$GITHUB_REF_NAME" \
             main.js manifest.json styles.css \
             --title "$GITHUB_REF_NAME" \
-            --generate-notes
+            "${notes[@]}"

@@ -379,7 +379,9 @@ git push --follow-tags
 `npm version` writes the new version into `package.json`, `manifest.json` and `versions.json`
 together and tags the commit. Pushing the tag runs `.github/workflows/release.yml`, which builds
 the plugin and publishes a GitHub release with `main.js`, `manifest.json` and `styles.css`
-attached — the three files BRAT and Obsidian download.
+attached — the three files BRAT and Obsidian download. The release's notes come from
+`release-notes/<version>.md` when that file exists, so write it before tagging; without one,
+GitHub's generated list of changes is used.
 
 Tags carry no `v` prefix, because Obsidian compares the tag against `manifest.json` exactly;
 `.npmrc` sets that, and the workflow refuses to release a tag that does not match rather than
