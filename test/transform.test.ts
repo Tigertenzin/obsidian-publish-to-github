@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_SETTINGS, type PublishToGithubSettings } from "../src/settings";
+import { DEFAULT_SETTINGS, type StaticSitePublisherSettings } from "../src/settings";
 import {
 	applyBreak,
 	buildOutput,
@@ -10,7 +10,7 @@ import {
 	type OutgoingProperty,
 } from "../src/transform";
 
-const settings = (overrides: Partial<PublishToGithubSettings> = {}): PublishToGithubSettings => ({
+const settings = (overrides: Partial<StaticSitePublisherSettings> = {}): StaticSitePublisherSettings => ({
 	...structuredClone(DEFAULT_SETTINGS),
 	...overrides,
 });

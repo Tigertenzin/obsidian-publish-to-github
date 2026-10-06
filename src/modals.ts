@@ -147,35 +147,35 @@ export class ReviewModal extends Modal {
 	onOpen(): void {
 		const { contentEl } = this;
 		contentEl.empty();
-		contentEl.addClass("ptg-modal");
+		contentEl.addClass("ssp-modal");
 
-		contentEl.createEl("h2", { text: "Publish to GitHub" });
+		contentEl.createEl("h2", { text: "Publish note" });
 
-		const summary = contentEl.createDiv({ cls: "ptg-summary" });
+		const summary = contentEl.createDiv({ cls: "ssp-summary" });
 		summary
-			.createDiv({ cls: "ptg-summary-row" })
+			.createDiv({ cls: "ssp-summary-row" })
 			.append(createLabel("Note"), createValue(this.context.sourcePath));
 		summary
-			.createDiv({ cls: "ptg-summary-row" })
+			.createDiv({ cls: "ssp-summary-row" })
 			.append(createLabel("Repository"), createValue(`${this.context.repoLabel} · ${this.context.branch}`));
 
 		this.renderFileName(summary);
 
 		if (this.context.frontmatterError) {
 			contentEl.createDiv({
-				cls: "ptg-warning",
+				cls: "ssp-warning",
 				text: `The note's frontmatter could not be read (${this.context.frontmatterError}). It will be replaced by the properties below.`,
 			});
 		}
 
 		contentEl.createEl("h3", { text: "Properties" });
 		contentEl.createEl("p", {
-			cls: "ptg-hint",
+			cls: "ssp-hint",
 			text: "These are the properties the published copy will carry. Editing them here changes only what is sent — the note in your vault is untouched.",
 		});
-		this.listEl = contentEl.createDiv({ cls: "ptg-property-list" });
+		this.listEl = contentEl.createDiv({ cls: "ssp-property-list" });
 
-		new Setting(contentEl).setClass("ptg-add-row").addButton((button) =>
+		new Setting(contentEl).setClass("ssp-add-row").addButton((button) =>
 			button.setButtonText("Add property").onClick(() => {
 				const property: OutgoingProperty = { key: "", type: "text", value: null, origin: "manual" };
 				this.context.properties.push(property);
@@ -188,7 +188,7 @@ export class ReviewModal extends Modal {
 
 		this.renderAttachments(contentEl);
 
-		this.destinationEl = contentEl.createDiv({ cls: "ptg-destination" });
+		this.destinationEl = contentEl.createDiv({ cls: "ssp-destination" });
 		this.runLookup();
 
 		this.renderBreakWarning(contentEl);
@@ -216,7 +216,7 @@ export class ReviewModal extends Modal {
 
 	/** The filename the post is published under, editable before publishing. */
 	private renderFileName(summary: HTMLElement): void {
-		const row = summary.createDiv({ cls: "ptg-summary-row" });
+		const row = summary.createDiv({ cls: "ssp-summary-row" });
 		row.append(createLabel("Filename"));
 
 		const input = new TextComponent(row)
@@ -229,12 +229,12 @@ export class ReviewModal extends Modal {
 				// The destination depends on the name, so re-check it as it settles.
 				this.scheduleLookup();
 			});
-		input.inputEl.addClass("ptg-filename-input");
+		input.inputEl.addClass("ssp-filename-input");
 		if (this.context.fileNameRemembered) {
-			row.createSpan({ cls: "ptg-origin", text: "as last published" });
+			row.createSpan({ cls: "ssp-origin", text: "as last published" });
 		}
 
-		this.pathEl = summary.createDiv({ cls: "ptg-summary-row ptg-path-row" });
+		this.pathEl = summary.createDiv({ cls: "ssp-summary-row ssp-path-row" });
 		this.renderPath();
 	}
 
@@ -259,13 +259,13 @@ export class ReviewModal extends Modal {
 		const path = this.context.resolvePath(this.context.fileName);
 		const seq = ++this.lookupSeq;
 
-		container.removeClass("ptg-destination-exists", "ptg-warning");
-		container.addClass("ptg-checking");
+		container.removeClass("ssp-destination-exists", "ssp-warning");
+		container.addClass("ssp-checking");
 		container.setText("Checking the repository…");
 
 		if (path.length === 0) {
-			container.removeClass("ptg-checking");
-			container.addClass("ptg-warning");
+			container.removeClass("ssp-checking");
+			container.addClass("ssp-warning");
 			container.setText("Give the file a name before publishing.");
 			return;
 		}
@@ -274,9 +274,9 @@ export class ReviewModal extends Modal {
 			.lookup(path)
 			.then((remote) => {
 				if (seq !== this.lookupSeq || !container.isConnected) return;
-				container.removeClass("ptg-checking");
+				container.removeClass("ssp-checking");
 				if (remote) {
-					container.addClass("ptg-destination-exists");
+					container.addClass("ssp-destination-exists");
 					container.setText(
 						"A file already exists at this path. You will see a diff and a separate confirmation before it is overwritten."
 					);
@@ -286,8 +286,8 @@ export class ReviewModal extends Modal {
 			})
 			.catch((error: Error) => {
 				if (seq !== this.lookupSeq || !container.isConnected) return;
-				container.removeClass("ptg-checking");
-				container.addClass("ptg-warning");
+				container.removeClass("ssp-checking");
+				container.addClass("ssp-warning");
 				container.setText(`Could not check the destination: ${error.message}`);
 			});
 	}
@@ -300,35 +300,35 @@ export class ReviewModal extends Modal {
 		const onlyImages = attachments.every((a) => mediaKind(a.embed.linkpath) === "image");
 		contentEl.createEl("h3", { text: onlyImages ? "Images" : "Attachments" });
 		contentEl.createEl("p", {
-			cls: "ptg-hint",
+			cls: "ssp-hint",
 			text: "Embeds in the published part of the note. Each is uploaded to the repository and its link rewritten to point there.",
 		});
 
 		const missing = attachments.filter((a) => a.missing);
 		if (missing.length > 0) {
 			contentEl.createDiv({
-				cls: "ptg-warning",
+				cls: "ssp-warning",
 				text: `${missing.length} embed${missing.length === 1 ? "" : "s"} could not be found in the vault. ${
 					missing.length === 1 ? "It" : "They"
 				} will be left exactly as written.`,
 			});
 		}
 
-		const list = contentEl.createDiv({ cls: "ptg-property-list" });
+		const list = contentEl.createDiv({ cls: "ssp-property-list" });
 
 		// Embeds of the same vault file share one upload, so their names move together.
 		const namesByFile = new Map<string, Array<{ attachment: Attachment; input: TextComponent; showUrl: () => void }>>();
 
 		for (const attachment of attachments) {
-			const row = list.createDiv({ cls: "ptg-property" });
-			const head = row.createDiv({ cls: "ptg-property-head" });
+			const row = list.createDiv({ cls: "ssp-property" });
+			const head = row.createDiv({ cls: "ssp-property-head" });
 
-			head.createSpan({ cls: "ptg-attachment-source", text: attachment.embed.linkpath });
+			head.createSpan({ cls: "ssp-attachment-source", text: attachment.embed.linkpath });
 			if (attachment.embed.width !== null) {
-				head.createSpan({ cls: "ptg-origin", text: `${attachment.embed.width}px` });
+				head.createSpan({ cls: "ssp-origin", text: `${attachment.embed.width}px` });
 			}
 			head.createSpan({
-				cls: attachment.missing ? "ptg-attachment-missing" : "ptg-origin",
+				cls: attachment.missing ? "ssp-attachment-missing" : "ssp-origin",
 				text: attachment.missing ? "not found" : formatBytes(attachment.size),
 			});
 
@@ -336,30 +336,30 @@ export class ReviewModal extends Modal {
 
 			if (attachment.size > LARGE_ATTACHMENT) {
 				row.createDiv({
-					cls: "ptg-warning",
+					cls: "ssp-warning",
 					text: `${formatBytes(
 						attachment.size
 					)} is large for a web page, and GitHub may refuse to commit it. Consider shrinking it in the vault first.`,
 				});
 			}
 
-			const nameRow = row.createDiv({ cls: "ptg-attachment-field" });
-			nameRow.createSpan({ cls: "ptg-label", text: "Name" });
+			const nameRow = row.createDiv({ cls: "ssp-attachment-field" });
+			nameRow.createSpan({ cls: "ssp-label", text: "Name" });
 			const name = new TextComponent(nameRow);
-			name.inputEl.addClass("ptg-value-input");
+			name.inputEl.addClass("ssp-value-input");
 
-			const altRow = row.createDiv({ cls: "ptg-attachment-field" });
+			const altRow = row.createDiv({ cls: "ssp-attachment-field" });
 			const altField = ALT_FIELDS[mediaKind(attachment.embed.linkpath) ?? "image"];
-			altRow.createSpan({ cls: "ptg-label", text: altField.label });
+			altRow.createSpan({ cls: "ssp-label", text: altField.label });
 			const alt = new TextComponent(altRow)
 				.setPlaceholder(altField.placeholder)
 				.setValue(attachment.alt)
 				.onChange((value) => {
 					attachment.alt = value;
 				});
-			alt.inputEl.addClass("ptg-value-input");
+			alt.inputEl.addClass("ssp-value-input");
 
-			const urlEl = row.createDiv({ cls: "ptg-attachment-url" });
+			const urlEl = row.createDiv({ cls: "ssp-attachment-url" });
 			const showUrl = () =>
 				urlEl.setText(
 					attachmentUrl(this.context.attachmentUrlPrefix, this.context.attachmentPath(attachment.fileName))
@@ -372,7 +372,7 @@ export class ReviewModal extends Modal {
 			namesByFile.set(filePath, siblings);
 
 			if (siblings.length > 1) {
-				head.createSpan({ cls: "ptg-origin", text: "same image as above" });
+				head.createSpan({ cls: "ssp-origin", text: "same image as above" });
 			}
 
 			const originalName = attachment.file?.name ?? "";
@@ -404,7 +404,7 @@ export class ReviewModal extends Modal {
 			const lines = result.headingUnderlines.map((line) => line + 1);
 			const many = lines.length > 1;
 			contentEl.createDiv({
-				cls: "ptg-note",
+				cls: "ssp-note",
 				text: `The break marker on body line${many ? "s" : ""} ${lines.join(", ")} sit${many ? "" : "s"} directly under a line of text, so markdown reads ${many ? "them" : "it"} as a heading underline and ${many ? "they were" : "it was"} not treated as a break. Put a blank line above a marker you meant as the break.`,
 			});
 		}
@@ -412,10 +412,10 @@ export class ReviewModal extends Modal {
 		if (!result.trimmed) return;
 
 		const heavy = result.droppedLines > result.keptLines;
-		const box = contentEl.createDiv({ cls: heavy ? "ptg-warning" : "ptg-note" });
+		const box = contentEl.createDiv({ cls: heavy ? "ssp-warning" : "ssp-note" });
 
 		box.createDiv({
-			cls: "ptg-break-headline",
+			cls: "ssp-break-headline",
 			text: `Break marker on body line ${result.markerLine + 1}: ${result.droppedLines} of ${
 				result.keptLines + result.droppedLines
 			} lines will be left out.`,
@@ -423,14 +423,14 @@ export class ReviewModal extends Modal {
 
 		if (heavy) {
 			box.createDiv({
-				cls: "ptg-break-headline",
+				cls: "ssp-break-headline",
 				text: "That is more than half the note — check the marker is where you meant it.",
 			});
 		}
 
-		const details = box.createEl("details", { cls: "ptg-break-details" });
+		const details = box.createEl("details", { cls: "ssp-break-details" });
 		details.createEl("summary", { text: "Show what will be dropped" });
-		const pre = details.createEl("pre", { cls: "ptg-preview ptg-break-preview" });
+		const pre = details.createEl("pre", { cls: "ssp-preview ssp-break-preview" });
 		pre.createEl("code", { text: result.dropped });
 	}
 
@@ -442,15 +442,15 @@ export class ReviewModal extends Modal {
 		const links = this.context.noteLinks;
 		if (links.length === 0) return;
 
-		const box = contentEl.createDiv({ cls: "ptg-warning" });
+		const box = contentEl.createDiv({ cls: "ssp-warning" });
 		box.createDiv({
-			cls: "ptg-break-headline",
+			cls: "ssp-break-headline",
 			text: `${links.length} link${links.length === 1 ? "" : "s"} to other notes will be published as plain text. If any should link to a page on your site, replace ${links.length === 1 ? "it" : "them"} with a regular link in the note.`,
 		});
 
-		const details = box.createEl("details", { cls: "ptg-break-details" });
+		const details = box.createEl("details", { cls: "ssp-break-details" });
 		details.createEl("summary", { text: "Show the links" });
-		const list = details.createEl("ul", { cls: "ptg-removed-list" });
+		const list = details.createEl("ul", { cls: "ssp-removed-list" });
 		for (const link of links) {
 			list.createEl("li", { text: `${link.raw} → ${link.text}` });
 		}
@@ -462,7 +462,7 @@ export class ReviewModal extends Modal {
 
 		if (this.focusKeyOf) {
 			const index = this.context.properties.indexOf(this.focusKeyOf);
-			const input = this.listEl.querySelectorAll<HTMLInputElement>(".ptg-key-input")[index];
+			const input = this.listEl.querySelectorAll<HTMLInputElement>(".ssp-key-input")[index];
 			input?.focus();
 			this.focusKeyOf = null;
 		}
@@ -505,7 +505,7 @@ export class ReviewModal extends Modal {
 
 		if (this.context.properties.length === 0) {
 			this.listEl.createEl("p", {
-				cls: "ptg-empty-state",
+				cls: "ssp-empty-state",
 				text: "The published copy will have no frontmatter.",
 			});
 			return;
@@ -517,8 +517,8 @@ export class ReviewModal extends Modal {
 	}
 
 	private renderRow(property: OutgoingProperty, index: number): void {
-		const row = this.listEl.createDiv({ cls: "ptg-property" });
-		const head = row.createDiv({ cls: "ptg-property-head" });
+		const row = this.listEl.createDiv({ cls: "ssp-property" });
+		const head = row.createDiv({ cls: "ssp-property-head" });
 
 		const key = new TextComponent(head)
 			.setPlaceholder("property name")
@@ -526,7 +526,7 @@ export class ReviewModal extends Modal {
 			.onChange((value) => {
 				property.key = value;
 			});
-		key.inputEl.addClass("ptg-key-input");
+		key.inputEl.addClass("ssp-key-input");
 		// Names already in the vault, minus the ones this note is already writing.
 		this.suggest(key.inputEl, () =>
 			this.context.index.names.filter(
@@ -552,7 +552,7 @@ export class ReviewModal extends Modal {
 			this.refresh();
 		});
 
-		head.createSpan({ cls: "ptg-origin", text: ORIGIN_LABELS[property.origin] });
+		head.createSpan({ cls: "ssp-origin", text: ORIGIN_LABELS[property.origin] });
 
 		new ExtraButtonComponent(head)
 			.setIcon("trash-2")
@@ -562,12 +562,12 @@ export class ReviewModal extends Modal {
 				this.refresh();
 			});
 
-		this.renderValue(row.createDiv({ cls: "ptg-property-value" }), property);
+		this.renderValue(row.createDiv({ cls: "ssp-property-value" }), property);
 	}
 
 	private renderValue(container: HTMLElement, property: OutgoingProperty): void {
 		if (property.type === "object") {
-			const pre = container.createEl("pre", { cls: "ptg-object-value" });
+			const pre = container.createEl("pre", { cls: "ssp-object-value" });
 			pre.createEl("code", { text: stringifyYaml(property.rawValue ?? null).trimEnd() });
 			return;
 		}
@@ -586,7 +586,7 @@ export class ReviewModal extends Modal {
 					property.value = parseValue(value, "number");
 				});
 				text.inputEl.type = "number";
-				text.inputEl.addClass("ptg-value-input");
+				text.inputEl.addClass("ssp-value-input");
 				return;
 			}
 
@@ -598,7 +598,7 @@ export class ReviewModal extends Modal {
 						property.value = parseValue(value, "list");
 					});
 				textarea.inputEl.rows = 3;
-				textarea.inputEl.addClass("ptg-value-input");
+				textarea.inputEl.addClass("ssp-value-input");
 				this.renderValueChips(container, property);
 				return;
 			}
@@ -613,7 +613,7 @@ export class ReviewModal extends Modal {
 					property.value = parseValue(value, type);
 				});
 				if (fitsPicker) text.inputEl.type = type === "date" ? "date" : "datetime-local";
-				text.inputEl.addClass("ptg-value-input");
+				text.inputEl.addClass("ssp-value-input");
 				return;
 			}
 
@@ -621,7 +621,7 @@ export class ReviewModal extends Modal {
 				const text = new TextComponent(container).setValue(current).onChange((value) => {
 					property.value = parseValue(value, "text");
 				});
-				text.inputEl.addClass("ptg-value-input");
+				text.inputEl.addClass("ssp-value-input");
 				this.suggest(text.inputEl, () => this.context.index.valuesFor(property.key));
 			}
 		}
@@ -638,7 +638,7 @@ export class ReviewModal extends Modal {
 		const textarea = container.querySelector("textarea");
 		if (!(textarea instanceof HTMLTextAreaElement)) return;
 
-		const chips = container.createDiv({ cls: "ptg-chips" });
+		const chips = container.createDiv({ cls: "ssp-chips" });
 
 		const render = () => {
 			chips.empty();
@@ -646,9 +646,9 @@ export class ReviewModal extends Modal {
 			const available = known.filter((value) => !current.has(value)).slice(0, 12);
 			if (available.length === 0) return;
 
-			chips.createSpan({ cls: "ptg-chips-label", text: "Add:" });
+			chips.createSpan({ cls: "ssp-chips-label", text: "Add:" });
 			for (const value of available) {
-				const chip = chips.createEl("button", { cls: "ptg-chip", text: value });
+				const chip = chips.createEl("button", { cls: "ssp-chip", text: value });
 				chip.type = "button";
 				chip.onclick = () => {
 					const next = [...(Array.isArray(property.value) ? property.value : []), value];
@@ -677,15 +677,15 @@ export class ReviewModal extends Modal {
 
 		this.removedEl.createEl("h3", { text: "Removed by settings" });
 		this.removedEl.createEl("p", {
-			cls: "ptg-hint",
+			cls: "ssp-hint",
 			text: "Present in the note, stripped from the published copy. Restore one to publish it this time.",
 		});
 
 		this.context.removed.forEach((property, index) => {
-			const row = this.removedEl.createDiv({ cls: "ptg-removed-row" });
-			row.createSpan({ cls: "ptg-removed-key", text: property.key });
+			const row = this.removedEl.createDiv({ cls: "ssp-removed-row" });
+			row.createSpan({ cls: "ssp-removed-key", text: property.key });
 			row.createSpan({
-				cls: "ptg-removed-value",
+				cls: "ssp-removed-value",
 				text: property.type === "object" ? "nested value" : valueToInput(property.value, property.type),
 			});
 
@@ -749,14 +749,14 @@ export class PreviewModal extends Modal {
 	onOpen(): void {
 		const { contentEl } = this;
 		contentEl.empty();
-		contentEl.addClass("ptg-modal");
+		contentEl.addClass("ssp-modal");
 
 		// Replacing the post is what warrants a warning and a second confirmation;
 		// an unchanged post is left alone, whatever happens to its images.
 		const overwriting = this.options.remote !== null && !this.options.postUnchanged;
 		contentEl.createEl("h2", { text: overwriting ? "Review changes" : "Preview" });
 		contentEl.createDiv({
-			cls: "ptg-summary-row",
+			cls: "ssp-summary-row",
 			text: `${this.options.repoLabel} · ${this.options.branch} · ${this.options.targetPath}`,
 		});
 
@@ -771,20 +771,20 @@ export class PreviewModal extends Modal {
 	private renderStatus(contentEl: HTMLElement): void {
 		if (this.options.remoteError) {
 			contentEl.createDiv({
-				cls: "ptg-warning",
+				cls: "ssp-warning",
 				text: `The destination could not be checked (${this.options.remoteError}). Publishing may overwrite an existing file without showing you a diff.`,
 			});
 			return;
 		}
 
 		if (!this.options.remote) {
-			contentEl.createDiv({ cls: "ptg-note", text: "This will create a new file." });
+			contentEl.createDiv({ cls: "ssp-note", text: "This will create a new file." });
 			return;
 		}
 
 		if (this.options.remote.tooLarge) {
 			contentEl.createDiv({
-				cls: "ptg-warning",
+				cls: "ssp-warning",
 				text: "A file already exists here but is too large for GitHub to return inline, so it cannot be diffed. Publishing will replace it.",
 			});
 			return;
@@ -798,27 +798,27 @@ export class PreviewModal extends Modal {
 			} else if (this.options.uploads !== null) {
 				text += ` Only the ${pending} new or changed attachment${pending === 1 ? "" : "s"} below will be uploaded.`;
 			}
-			contentEl.createDiv({ cls: "ptg-note", text });
+			contentEl.createDiv({ cls: "ssp-note", text });
 			return;
 		}
 
 		if (this.diff?.whitespaceOnly) {
 			contentEl.createDiv({
-				cls: "ptg-note",
+				cls: "ssp-note",
 				text: "No line differs from the file in the repository — only its line endings or trailing newline. Publishing will still rewrite the file.",
 			});
 			return;
 		}
 
-		const stats = contentEl.createDiv({ cls: "ptg-warning" });
+		const stats = contentEl.createDiv({ cls: "ssp-warning" });
 		stats.setText("This will overwrite the file already at this path. ");
-		stats.createSpan({ cls: "ptg-stat-add", text: `+${this.diff?.added ?? 0}` });
+		stats.createSpan({ cls: "ssp-stat-add", text: `+${this.diff?.added ?? 0}` });
 		stats.createSpan({ text: " " });
-		stats.createSpan({ cls: "ptg-stat-remove", text: `−${this.diff?.removed ?? 0}` });
+		stats.createSpan({ cls: "ssp-stat-remove", text: `−${this.diff?.removed ?? 0}` });
 
 		if (this.diff?.coarse) {
 			contentEl.createDiv({
-				cls: "ptg-hint",
+				cls: "ssp-hint",
 				text: "The documents differ too much to match up line by line, so the whole file is shown as replaced.",
 			});
 		}
@@ -828,7 +828,7 @@ export class PreviewModal extends Modal {
 	private renderAttachmentSummary(contentEl: HTMLElement): void {
 		if (this.options.uploadsError) {
 			contentEl.createDiv({
-				cls: "ptg-warning",
+				cls: "ssp-warning",
 				text: `The attachments could not be checked against the repository (${this.options.uploadsError}). Publishing checks them again, and stops if it still cannot.`,
 			});
 			return;
@@ -839,17 +839,17 @@ export class PreviewModal extends Modal {
 
 		const pending = this.pendingUploads();
 		const noun = uploads.every((upload) => mediaKind(upload.path) === "image") ? "image" : "attachment";
-		const box = contentEl.createDiv({ cls: "ptg-note" });
+		const box = contentEl.createDiv({ cls: "ssp-note" });
 		box.createDiv({
 			text:
 				pending === 0
 					? `All ${uploads.length} ${noun}${uploads.length === 1 ? " is" : "s are"} already in the repository unchanged:`
 					: `${pending} ${noun}${pending === 1 ? "" : "s"} will be committed together with the post, in one commit:`,
 		});
-		const list = box.createEl("ul", { cls: "ptg-removed-list" });
+		const list = box.createEl("ul", { cls: "ssp-removed-list" });
 		for (const upload of uploads) {
 			const item = list.createEl("li", { text: `${upload.path} ` });
-			item.createSpan({ cls: "ptg-origin", text: UPLOAD_STATUS_LABELS[upload.status] });
+			item.createSpan({ cls: "ssp-origin", text: UPLOAD_STATUS_LABELS[upload.status] });
 		}
 	}
 
@@ -866,7 +866,7 @@ export class PreviewModal extends Modal {
 	private renderViewSwitch(contentEl: HTMLElement): void {
 		if (!hasLineChanges(this.diff)) return;
 
-		const switcher = contentEl.createDiv({ cls: "ptg-view-switch" });
+		const switcher = contentEl.createDiv({ cls: "ssp-view-switch" });
 		const options: Array<{ id: "diff" | "document"; label: string }> = [
 			{ id: "diff", label: "Changes" },
 			{ id: "document", label: "Full document" },
@@ -892,22 +892,22 @@ export class PreviewModal extends Modal {
 			return;
 		}
 
-		const pre = this.bodyEl.createEl("pre", { cls: "ptg-preview" });
+		const pre = this.bodyEl.createEl("pre", { cls: "ssp-preview" });
 		pre.createEl("code", { text: this.options.output });
 
 		if (this.options.output.trim().length === 0) {
 			this.bodyEl.createDiv({
-				cls: "ptg-warning",
+				cls: "ssp-warning",
 				text: "The published copy would be empty. Check the break marker and property settings.",
 			});
 		}
 	}
 
 	private renderDiff(container: HTMLElement): void {
-		const pre = container.createEl("pre", { cls: "ptg-preview ptg-diff" });
+		const pre = container.createEl("pre", { cls: "ssp-preview ssp-diff" });
 
 		for (const line of this.diff?.lines ?? []) {
-			pre.createDiv({ cls: `ptg-diff-line ptg-diff-${line.type}`, text: diffLineText(line) });
+			pre.createDiv({ cls: `ssp-diff-line ssp-diff-${line.type}`, text: diffLineText(line) });
 		}
 	}
 
@@ -983,7 +983,7 @@ export class ConfirmOverwriteModal extends Modal {
 	onOpen(): void {
 		const { contentEl } = this;
 		contentEl.empty();
-		contentEl.addClass("ptg-modal");
+		contentEl.addClass("ssp-modal");
 
 		contentEl.createEl("h2", { text: "Overwrite this file?" });
 
@@ -993,15 +993,15 @@ export class ConfirmOverwriteModal extends Modal {
 
 		const diff = this.options.diff;
 		if (hasLineChanges(diff)) {
-			const stats = contentEl.createEl("p", { cls: "ptg-summary-row" });
-			stats.createSpan({ cls: "ptg-stat-add", text: `+${diff.added}` });
+			const stats = contentEl.createEl("p", { cls: "ssp-summary-row" });
+			stats.createSpan({ cls: "ssp-stat-add", text: `+${diff.added}` });
 			stats.createSpan({ text: " " });
-			stats.createSpan({ cls: "ptg-stat-remove", text: `−${diff.removed}` });
+			stats.createSpan({ cls: "ssp-stat-remove", text: `−${diff.removed}` });
 			stats.createSpan({ text: " lines" });
 		}
 
 		contentEl.createEl("p", {
-			cls: "ptg-hint",
+			cls: "ssp-hint",
 			text: "Nothing is committed if the post or any of its attachments has changed on GitHub since it was read.",
 		});
 
@@ -1058,13 +1058,13 @@ function diffLineText(line: DiffLine): string {
 }
 
 function createLabel(text: string): HTMLElement {
-	const el = createSpan({ cls: "ptg-label" });
+	const el = createSpan({ cls: "ssp-label" });
 	el.setText(text);
 	return el;
 }
 
 function createValue(text: string): HTMLElement {
-	const el = createSpan({ cls: "ptg-value" });
+	const el = createSpan({ cls: "ssp-value" });
 	el.setText(text);
 	return el;
 }

@@ -1,4 +1,4 @@
-import { MarkdownView, Notice, Plugin, TFile } from "obsidian";
+import { MarkdownView, Notice, Plugin, TFile, normalizePath } from "obsidian";
 import {
 	attachmentUrl,
 	findEmbeds,
@@ -17,8 +17,8 @@ import {
 } from "./modals";
 import {
 	DEFAULT_SETTINGS,
-	PublishToGithubSettingTab,
-	type PublishToGithubSettings,
+	StaticSitePublisherSettingTab,
+	type StaticSitePublisherSettings,
 } from "./settings";
 import { expandPlaceholders } from "./placeholders";
 import { convertHighlights, findNoteLinks, noteLinksToText, stripComments } from "./syntax";
@@ -34,8 +34,8 @@ import {
 	resolveProperties,
 } from "./transform";
 
-export default class PublishToGithubPlugin extends Plugin {
-	settings: PublishToGithubSettings = DEFAULT_SETTINGS;
+export default class StaticSitePublisherPlugin extends Plugin {
+	settings: StaticSitePublisherSettings = DEFAULT_SETTINGS;
 	private client!: GithubClient;
 
 	async onload() {
@@ -46,7 +46,7 @@ export default class PublishToGithubPlugin extends Plugin {
 		);
 
 		this.addCommand({
-			id: "publish-to-github",
+			id: "publish-current-note",
 			name: "Publish current note",
 			checkCallback: (checking: boolean) => {
 				const file = this.activeMarkdownFile();
@@ -56,7 +56,7 @@ export default class PublishToGithubPlugin extends Plugin {
 			},
 		});
 
-		this.addSettingTab(new PublishToGithubSettingTab(this.app, this));
+		this.addSettingTab(new StaticSitePublisherSettingTab(this.app, this));
 
 		// The remembered filenames are keyed by vault path, so they follow the note.
 		this.registerEvent(
@@ -84,7 +84,9 @@ export default class PublishToGithubPlugin extends Plugin {
 	async loadSettings() {
 		// A deep copy, so the lists the settings tab edits in place are never the
 		// defaults' own: a fresh install would otherwise be editing DEFAULT_SETTINGS.
-		const saved = await this.loadData();
+		let saved = await this.loadData();
+		const imported = saved === null || saved === undefined ? await this.formerPluginData() : null;
+		if (imported) saved = imported;
 		this.settings = Object.assign(structuredClone(DEFAULT_SETTINGS), saved);
 
 		// Earlier versions always published under the note's own name. Keep that for
@@ -104,6 +106,31 @@ export default class PublishToGithubPlugin extends Plugin {
 				.map((line) => line.trim())
 				.filter((line) => line.length > 0);
 		}
+
+		if (imported) {
+			await this.saveSettings();
+			new Notice(
+				"Static Site Publisher imported your settings from Publish to GitHub, its former name. You can now uninstall Publish to GitHub, and re-assign any hotkey you had for publishing.",
+				15000
+			);
+		}
+	}
+
+	/**
+	 * The plugin was called Publish to GitHub, with the id "publish-to-github", and
+	 * its settings live in that plugin's own folder. A first load under the new id
+	 * reads them from there, so nothing has to be set up again. Null when there is
+	 * nothing to import.
+	 */
+	private async formerPluginData(): Promise<unknown> {
+		const path = normalizePath(`${this.app.vault.configDir}/plugins/${FORMER_PLUGIN_ID}/data.json`);
+		try {
+			if (!(await this.app.vault.adapter.exists(path))) return null;
+			const data: unknown = JSON.parse(await this.app.vault.adapter.read(path));
+			return data && typeof data === "object" ? data : null;
+		} catch {
+			return null;
+		}
 	}
 
 	/**
@@ -118,23 +145,31 @@ export default class PublishToGithubPlugin extends Plugin {
 	}
 
 	/**
-	 * Earlier versions kept the token itself in data.json. Move it into Obsidian's
-	 * secret storage and keep only the secret's name. The plaintext copy is dropped
-	 * only once the secret is confirmed to read back; if anything goes wrong it
-	 * stays where it was, and is tried again on the next load.
+	 * Brings the token under this plugin's own secret name. Versions before 0.2.0
+	 * kept the token itself in data.json; 0.2.x kept it in secret storage under the
+	 * former name. Either way it is copied into secret storage as
+	 * "static-site-publisher-token" and the settings point there. The old copy is
+	 * let go only once the new one is confirmed to read back; if anything goes wrong
+	 * it stays where it was, keeps working, and the move is tried again on the next
+	 * load. (A secret cannot be deleted by a plugin, so the old one is left in place
+	 * for the old plugin, until you remove it in Obsidian's settings.)
 	 */
 	private async migrateToken(): Promise<void> {
-		const settings = this.settings as PublishToGithubSettings & { token?: unknown };
-		const token = typeof settings.token === "string" ? settings.token.trim() : "";
+		const settings = this.settings as StaticSitePublisherSettings & { token?: unknown };
+		const storage = this.app.secretStorage;
+
+		const plaintext = typeof settings.token === "string" ? settings.token.trim() : "";
+		const formerSecret =
+			settings.tokenSecret === FORMER_TOKEN_SECRET_ID ? storage.getSecret(FORMER_TOKEN_SECRET_ID) ?? "" : "";
+		const token = plaintext || formerSecret;
 		if (token.length === 0) {
 			delete settings.token;
 			return;
 		}
 
-		const storage = this.app.secretStorage;
 		try {
 			// Reuse a secret already holding this token, or take a name nothing else has.
-			let id = settings.tokenSecret || TOKEN_SECRET_ID;
+			let id = settings.tokenSecret && !formerSecret ? settings.tokenSecret : TOKEN_SECRET_ID;
 			for (let n = 2; storage.getSecret(id) !== null && storage.getSecret(id) !== token; n++) {
 				id = `${TOKEN_SECRET_ID}-${n}`;
 			}
@@ -149,6 +184,9 @@ export default class PublishToGithubPlugin extends Plugin {
 			return;
 		}
 
+		// Moving from the former secret name is housekeeping; only a token leaving
+		// plain text is worth telling anyone about.
+		if (!plaintext) return;
 		new Notice(
 			"Static Site Publisher moved your access token out of data.json into Obsidian's secret storage. Secrets are kept per device: on any other device you publish from, set the token once in the plugin settings.",
 			15000
@@ -530,15 +568,19 @@ export default class PublishToGithubPlugin extends Plugin {
 function withLinks(text: string, links: Array<{ text: string; url: string }>): DocumentFragment {
 	const fragment = createFragment();
 	fragment.createDiv({ text });
-	const row = fragment.createDiv({ cls: "ptg-notice-links" });
+	const row = fragment.createDiv({ cls: "ssp-notice-links" });
 	for (const link of links) {
 		row.createEl("a", { text: link.text, href: link.url });
 	}
 	return fragment;
 }
 
-/** The secret the access token is moved into from data.json. */
-const TOKEN_SECRET_ID = "publish-to-github-token";
+/** The secret the access token is kept in. */
+const TOKEN_SECRET_ID = "static-site-publisher-token";
+
+/** The plugin's id, and its token's secret name, before it was renamed in 0.3.0. */
+const FORMER_PLUGIN_ID = "publish-to-github";
+const FORMER_TOKEN_SECRET_ID = "publish-to-github-token";
 
 /** Joins a repository folder and a filename, tolerating stray slashes. */
 function joinPath(folder: string, name: string): string {

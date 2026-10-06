@@ -1,7 +1,7 @@
 import { App, Notice, PluginSettingTab, SecretComponent, Setting } from "obsidian";
 import type { ImageSizeStyle } from "./attachments";
 import type { HighlightStyle, NoteLinkStyle } from "./syntax";
-import type PublishToGithubPlugin from "./main";
+import type StaticSitePublisherPlugin from "./main";
 import { TextSuggest } from "./suggest";
 import { buildVaultIndex, type VaultIndex } from "./vault";
 
@@ -27,7 +27,7 @@ export interface AddedProperty {
 	keepExistingValue: boolean;
 }
 
-export interface PublishToGithubSettings {
+export interface StaticSitePublisherSettings {
 	// GitHub connection
 	owner: string;
 	repo: string;
@@ -71,7 +71,7 @@ export interface PublishToGithubSettings {
 	publishedFileNames: Record<string, string>;
 }
 
-export const DEFAULT_SETTINGS: PublishToGithubSettings = {
+export const DEFAULT_SETTINGS: StaticSitePublisherSettings = {
 	owner: "",
 	repo: "",
 	branch: "main",
@@ -104,14 +104,14 @@ export const DEFAULT_SETTINGS: PublishToGithubSettings = {
 const PLACEHOLDER_HELP =
 	"{{title}}, {{slug}}, {{date}}, {{time}} and {{datetime}}; dates take a format, as {{date:MMMM D, YYYY}}.";
 
-export class PublishToGithubSettingTab extends PluginSettingTab {
-	plugin: PublishToGithubPlugin;
+export class StaticSitePublisherSettingTab extends PluginSettingTab {
+	plugin: StaticSitePublisherPlugin;
 	private index: VaultIndex = { names: [], valuesFor: () => [] };
 	private suggests: TextSuggest[] = [];
 	/** Repository folders, fetched once per settings visit when first needed. */
 	private folders: Promise<string[]> | null = null;
 
-	constructor(app: App, plugin: PublishToGithubPlugin) {
+	constructor(app: App, plugin: StaticSitePublisherPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
@@ -180,12 +180,12 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 	private renderSetup(containerEl: HTMLElement) {
 		new Setting(containerEl).setName("Setting up").setHeading();
 
-		const intro = containerEl.createDiv({ cls: "ptg-setup" });
+		const intro = containerEl.createDiv({ cls: "ssp-setup" });
 		intro.createEl("p", {
 			text: "There is no “sign in with GitHub” step. Instead you create a key on GitHub that opens one repository, and paste it in below. The plugin shows that key to GitHub each time it publishes; that is the whole connection.",
 		});
 
-		const steps = intro.createEl("ol", { cls: "ptg-setup-steps" });
+		const steps = intro.createEl("ol", { cls: "ssp-setup-steps" });
 
 		const create = steps.createEl("li");
 		create.createSpan({ text: "On GitHub, create a " });
@@ -211,7 +211,7 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 
 		// Folded away: true and worth reading once, but not what someone setting
 		// the plugin up for the first time needs in front of them.
-		const notes = containerEl.createEl("details", { cls: "ptg-details" });
+		const notes = containerEl.createEl("details", { cls: "ssp-details" });
 		notes.createEl("summary", { text: "Where the token is kept, and how to disconnect" });
 		notes.createEl("p", {
 			text: "The token is kept in Obsidian's secret storage, which belongs to this device rather than to your vault: the plugin's settings only record the secret's name. A backup, a sync service or a git repository that copies your vault does not copy the token — which also means that on each other device you publish from, you set the token once in these settings.",
@@ -391,13 +391,13 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 		if (this.plugin.settings.propertiesToAdd.length === 0) {
 			containerEl.createEl("p", {
 				text: "No properties configured yet.",
-				cls: "ptg-empty-state",
+				cls: "ssp-empty-state",
 			});
 		}
 
 		this.plugin.settings.propertiesToAdd.forEach((property, index) => {
 			const setting = new Setting(containerEl)
-				.setClass("ptg-property-row")
+				.setClass("ssp-property-row")
 				.addText((text) => {
 					text
 						.setPlaceholder("property name")
@@ -455,7 +455,7 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 
 		containerEl.createEl("p", {
 			text: "Columns: name · type · default value · keep existing value.",
-			cls: "ptg-hint",
+			cls: "ssp-hint",
 		});
 	}
 
@@ -478,14 +478,14 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 		if (this.plugin.settings.propertiesToRemove.length === 0) {
 			containerEl.createEl("p", {
 				text: "No properties configured yet.",
-				cls: "ptg-empty-state",
+				cls: "ssp-empty-state",
 			});
 			return;
 		}
 
 		this.plugin.settings.propertiesToRemove.forEach((name, index) => {
 			new Setting(containerEl)
-				.setClass("ptg-property-row")
+				.setClass("ssp-property-row")
 				.addText((text) => {
 					text
 						.setPlaceholder("property name")
@@ -494,7 +494,7 @@ export class PublishToGithubSettingTab extends PluginSettingTab {
 							this.plugin.settings.propertiesToRemove[index] = value.trim();
 							await this.save();
 						});
-					text.inputEl.addClass("ptg-remove-input");
+					text.inputEl.addClass("ssp-remove-input");
 					// Suggest what the vault actually uses, minus what is already listed.
 					this.suggest(text.inputEl, () =>
 						this.index.names.filter(

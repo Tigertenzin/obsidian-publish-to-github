@@ -1,5 +1,5 @@
 import { parseYaml, stringifyYaml } from "obsidian";
-import type { AddedProperty, PropertyType, PublishToGithubSettings } from "./settings";
+import type { AddedProperty, PropertyType, StaticSitePublisherSettings } from "./settings";
 
 export type PropertyValue = string | number | boolean | string[] | null;
 
@@ -73,7 +73,7 @@ export function parseNote(content: string): ParsedNote {
  */
 export function resolveProperties(
 	frontmatter: Record<string, unknown>,
-	settings: PublishToGithubSettings,
+	settings: StaticSitePublisherSettings,
 	/** Fills in any {{placeholders}} in a configured default value. */
 	expand: (template: string) => string = (template) => template
 ): { properties: OutgoingProperty[]; removed: OutgoingProperty[] } {
@@ -244,7 +244,7 @@ export interface BreakResult {
  * sits directly under a line of text, where markdown reads "---" or "===" as the
  * underline of a heading rather than as a rule.
  */
-export function applyBreak(body: string, settings: PublishToGithubSettings): BreakResult {
+export function applyBreak(body: string, settings: StaticSitePublisherSettings): BreakResult {
 	const marker = settings.breakMarker.trim();
 	const lines = body.split("\n");
 	const untouched: BreakResult = {
@@ -419,7 +419,7 @@ export function normaliseFileName(name: string): string {
 export function buildTargetPath(
 	vaultPath: string,
 	fileName: string,
-	settings: PublishToGithubSettings
+	settings: StaticSitePublisherSettings
 ): string {
 	return [normaliseSegment(settings.targetFolder), postRelativePath(vaultPath, fileName, settings)]
 		.filter((segment) => segment.length > 0)
@@ -430,7 +430,7 @@ export function buildTargetPath(
 export function postRelativePath(
 	vaultPath: string,
 	fileName: string,
-	settings: PublishToGithubSettings
+	settings: StaticSitePublisherSettings
 ): string {
 	const sourceName = defaultFileName(vaultPath);
 	const vaultFolder = vaultPath.slice(0, Math.max(0, vaultPath.length - sourceName.length));

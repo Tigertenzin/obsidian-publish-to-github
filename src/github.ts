@@ -1,5 +1,5 @@
 import { requestUrl, type RequestUrlResponse } from "obsidian";
-import type { PublishToGithubSettings } from "./settings";
+import type { StaticSitePublisherSettings } from "./settings";
 
 const API_ROOT = "https://api.github.com";
 
@@ -58,12 +58,12 @@ const MAX_COMMIT_ATTEMPTS = 3;
 
 export class GithubClient {
 	constructor(
-		private readonly getSettings: () => PublishToGithubSettings,
+		private readonly getSettings: () => StaticSitePublisherSettings,
 		/** The token itself, read from Obsidian's secret storage; null when it is not set. */
 		private readonly getToken: () => string | null
 	) {}
 
-	private get settings(): PublishToGithubSettings {
+	private get settings(): StaticSitePublisherSettings {
 		return this.getSettings();
 	}
 

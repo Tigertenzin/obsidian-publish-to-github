@@ -61,10 +61,10 @@ export class TextSuggest {
 
 	private render(): void {
 		if (!this.listEl) {
-			this.listEl = document.body.createDiv({ cls: "ptg-suggest" });
+			this.listEl = document.body.createDiv({ cls: "ssp-suggest" });
 			// Chosen on mousedown so the input's blur does not close the list first.
 			this.listEl.addEventListener("mousedown", (event) => {
-				const target = (event.target as HTMLElement).closest(".ptg-suggest-item");
+				const target = (event.target as HTMLElement).closest(".ssp-suggest-item");
 				if (!target) return;
 				event.preventDefault();
 				const index = Number(target.getAttribute("data-index"));
@@ -74,7 +74,7 @@ export class TextSuggest {
 
 		this.listEl.empty();
 		this.items.forEach((item, index) => {
-			const el = this.listEl!.createDiv({ cls: "ptg-suggest-item", text: item });
+			const el = this.listEl!.createDiv({ cls: "ssp-suggest-item", text: item });
 			el.setAttribute("data-index", String(index));
 			el.toggleClass("is-selected", index === this.active);
 		});

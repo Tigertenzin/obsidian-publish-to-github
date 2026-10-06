@@ -1,13 +1,13 @@
-.ptg-modal {
+.ssp-modal {
 	max-width: 40rem;
 }
 
 /* Anything wider than the modal scrolls inside its own box, never the modal. */
-.ptg-modal * {
+.ssp-modal * {
 	max-width: 100%;
 }
 
-.ptg-modal pre {
+.ssp-modal pre {
 	max-width: 100%;
 	overflow-x: auto;
 }
@@ -18,19 +18,19 @@
  * the date format they render. A min-width beats a max-width in the cascade, so
  * capping the width above is not enough on its own; it has to be zeroed here.
  */
-.ptg-modal input,
-.ptg-modal select,
-.ptg-modal textarea,
-.ptg-property-row input,
-.ptg-property-row select {
+.ssp-modal input,
+.ssp-modal select,
+.ssp-modal textarea,
+.ssp-property-row input,
+.ssp-property-row select {
 	min-width: 0;
 	max-width: 100%;
 	box-sizing: border-box;
 }
 
-.ptg-property-value input,
-.ptg-property-value textarea,
-.ptg-attachment-field input {
+.ssp-property-value input,
+.ssp-property-value textarea,
+.ssp-attachment-field input {
 	width: 100%;
 }
 
@@ -40,21 +40,21 @@
  * grows and drags the whole pane with it. "anywhere" lets it break mid-string,
  * which is the only thing that keeps the container honest.
  */
-.ptg-setup,
-.ptg-setup p,
-.ptg-setup-steps li,
-.ptg-details,
-.ptg-details p,
-.ptg-hint,
-.ptg-note,
-.ptg-warning,
-.ptg-empty-state,
-.ptg-destination,
-.ptg-break-headline,
-.ptg-chip,
-.ptg-suggest-item,
-.ptg-modal li,
-.ptg-modal p {
+.ssp-setup,
+.ssp-setup p,
+.ssp-setup-steps li,
+.ssp-details,
+.ssp-details p,
+.ssp-hint,
+.ssp-note,
+.ssp-warning,
+.ssp-empty-state,
+.ssp-destination,
+.ssp-break-headline,
+.ssp-chip,
+.ssp-suggest-item,
+.ssp-modal li,
+.ssp-modal p {
 	overflow-wrap: anywhere;
 	word-break: break-word;
 }
@@ -70,9 +70,9 @@
  * an ordinary text box; the pseudo-element rules that follow constrain the
  * parts that survive. Tapping still opens the system picker.
  */
-.ptg-modal input[type="date"],
-.ptg-modal input[type="datetime-local"],
-.ptg-modal input[type="number"] {
+.ssp-modal input[type="date"],
+.ssp-modal input[type="datetime-local"],
+.ssp-modal input[type="number"] {
 	width: 100%;
 	min-width: 0;
 	max-width: 100%;
@@ -81,8 +81,8 @@
 	overflow: hidden;
 }
 
-.ptg-modal input[type="date"]::-webkit-date-and-time-value,
-.ptg-modal input[type="datetime-local"]::-webkit-date-and-time-value {
+.ssp-modal input[type="date"]::-webkit-date-and-time-value,
+.ssp-modal input[type="datetime-local"]::-webkit-date-and-time-value {
 	width: 100%;
 	min-width: 0;
 	max-width: 100%;
@@ -93,22 +93,22 @@
 	text-overflow: ellipsis;
 }
 
-.ptg-modal input[type="date"]::-webkit-datetime-edit,
-.ptg-modal input[type="datetime-local"]::-webkit-datetime-edit {
+.ssp-modal input[type="date"]::-webkit-datetime-edit,
+.ssp-modal input[type="datetime-local"]::-webkit-datetime-edit {
 	width: 100%;
 	min-width: 0;
 	padding: 0;
 	overflow: hidden;
 }
 
-.ptg-modal input[type="date"]::-webkit-datetime-edit-fields-wrapper,
-.ptg-modal input[type="datetime-local"]::-webkit-datetime-edit-fields-wrapper {
+.ssp-modal input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+.ssp-modal input[type="datetime-local"]::-webkit-datetime-edit-fields-wrapper {
 	min-width: 0;
 	padding: 0;
 }
 
-.ptg-modal input[type="date"]::-webkit-calendar-picker-indicator,
-.ptg-modal input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+.ssp-modal input[type="date"]::-webkit-calendar-picker-indicator,
+.ssp-modal input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 	flex: 0 0 auto;
 	margin-left: 0;
 	padding: 0;
@@ -121,27 +121,27 @@
  * that misbehaves on a platform this was never tested against spoils its own
  * row rather than the whole window.
  */
-.ptg-modal {
+.ssp-modal {
 	overflow-x: hidden;
 }
 
-.ptg-property,
-.ptg-property-value,
-.ptg-attachment-field {
+.ssp-property,
+.ssp-property-value,
+.ssp-attachment-field {
 	overflow-x: hidden;
 }
 
-.ptg-modal h3 {
+.ssp-modal h3 {
 	margin-bottom: 0.25em;
 	padding-bottom: 0.3em;
 	border-bottom: 1px solid var(--background-modifier-border);
 }
 
-.ptg-summary {
+.ssp-summary {
 	margin-bottom: 1em;
 }
 
-.ptg-summary-row {
+.ssp-summary-row {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 0.3em 0.6em;
@@ -152,19 +152,19 @@
 	overflow-wrap: anywhere;
 }
 
-.ptg-label {
+.ssp-label {
 	flex: 0 0 5.5rem;
 	color: var(--text-faint);
 }
 
-.ptg-value {
+.ssp-value {
 	/* min-width lets a long path shrink instead of widening the modal. */
 	flex: 1 1 0;
 	min-width: 0;
 	color: var(--text-normal);
 }
 
-.ptg-preview {
+.ssp-preview {
 	max-height: 24rem;
 	overflow: auto;
 	padding: 0.75em;
@@ -175,21 +175,21 @@
 	font-size: var(--font-ui-smaller);
 }
 
-.ptg-removed-list {
+.ssp-removed-list {
 	margin: 0.4em 0 0;
 	padding-left: 1.4em;
 	color: var(--text-muted);
 	font-size: var(--font-ui-small);
 }
 
-.ptg-empty-state,
-.ptg-hint,
-.ptg-note {
+.ssp-empty-state,
+.ssp-hint,
+.ssp-note {
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
 }
 
-.ptg-warning {
+.ssp-warning {
 	margin: 0.6em 0;
 	padding: 0.6em 0.8em;
 	border-radius: var(--radius-s);
@@ -204,39 +204,39 @@
  * pane wider rather than wrapping. These rows carry three, so they say plainly
  * that they may wrap and that every field may shrink.
  */
-.ptg-property-row,
-.ptg-property-row .setting-item-control {
+.ssp-property-row,
+.ssp-property-row .setting-item-control {
 	flex-wrap: wrap;
 	min-width: 0;
 }
 
-.ptg-property-row .setting-item-control > * {
+.ssp-property-row .setting-item-control > * {
 	min-width: 0;
 	max-width: 100%;
 }
 
-.ptg-property-row .setting-item-control input[type="text"] {
+.ssp-property-row .setting-item-control input[type="text"] {
 	flex: 1 1 9rem;
 	width: 9rem;
 }
 
 /* Review window property rows */
 
-.ptg-property-list {
+.ssp-property-list {
 	display: flex;
 	flex-direction: column;
 	gap: 0.5em;
 	margin: 0.6em 0;
 }
 
-.ptg-property {
+.ssp-property {
 	padding: 0.6em 0.7em;
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-s);
 	background-color: var(--background-primary-alt);
 }
 
-.ptg-property-head {
+.ssp-property-head {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
@@ -244,27 +244,27 @@
 	margin-bottom: 0.45em;
 }
 
-.ptg-key-input {
+.ssp-key-input {
 	flex: 1 1 8rem;
 	min-width: 0;
 	max-width: 100%;
 	font-weight: var(--font-medium);
 }
 
-.ptg-property-head select {
+.ssp-property-head select {
 	flex: 0 0 auto;
 }
 
-.ptg-origin {
+.ssp-origin {
 	flex: 0 0 auto;
 	color: var(--text-faint);
 	font-size: var(--font-ui-smaller);
 	white-space: nowrap;
 }
 
-.ptg-property-value input.ptg-value-input,
-.ptg-property-value textarea.ptg-value-input,
-.ptg-attachment-field input.ptg-value-input {
+.ssp-property-value input.ssp-value-input,
+.ssp-property-value textarea.ssp-value-input,
+.ssp-attachment-field input.ssp-value-input {
 	width: 100%;
 	max-width: 100%;
 	box-sizing: border-box;
@@ -272,7 +272,7 @@
 	font-family: var(--font-text);
 }
 
-.ptg-object-value {
+.ssp-object-value {
 	margin: 0;
 	padding: 0.5em 0.6em;
 	overflow-x: auto;
@@ -282,12 +282,12 @@
 	font-size: var(--font-ui-smaller);
 }
 
-.ptg-add-row.setting-item {
+.ssp-add-row.setting-item {
 	padding-top: 0;
 	border-top: none;
 }
 
-.ptg-removed-row {
+.ssp-removed-row {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
@@ -297,12 +297,12 @@
 	font-size: var(--font-ui-small);
 }
 
-.ptg-removed-key {
+.ssp-removed-key {
 	flex: 0 0 auto;
 	font-weight: var(--font-medium);
 }
 
-.ptg-removed-value {
+.ssp-removed-value {
 	/* Without min-width a nowrap flex child refuses to shrink and widens the modal. */
 	flex: 1 1 0;
 	min-width: 0;
@@ -312,8 +312,8 @@
 	white-space: nowrap;
 }
 
-.ptg-list-row .setting-item-control textarea,
-.ptg-textarea-row .setting-item-control textarea {
+.ssp-list-row .setting-item-control textarea,
+.ssp-textarea-row .setting-item-control textarea {
 	width: 100%;
 	min-width: 0;
 	max-width: 100%;
@@ -324,7 +324,7 @@
 
 /* Destination check */
 
-.ptg-destination {
+.ssp-destination {
 	margin: 0.8em 0 0.2em;
 	padding: 0.5em 0.7em;
 	border-radius: var(--radius-s);
@@ -333,25 +333,25 @@
 	font-size: var(--font-ui-small);
 }
 
-.ptg-destination.ptg-checking {
+.ssp-destination.ssp-checking {
 	color: var(--text-faint);
 	font-style: italic;
 }
 
-.ptg-destination.ptg-destination-exists {
+.ssp-destination.ssp-destination-exists {
 	background-color: var(--background-modifier-hover);
 	color: var(--text-normal);
 }
 
 /* Diff view */
 
-.ptg-view-switch {
+.ssp-view-switch {
 	display: flex;
 	gap: 0.3em;
 	margin: 0.8em 0 0.5em;
 }
 
-.ptg-view-switch button {
+.ssp-view-switch button {
 	padding: 0.25em 0.8em;
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-s);
@@ -362,57 +362,57 @@
 	cursor: pointer;
 }
 
-.ptg-view-switch button.is-active {
+.ssp-view-switch button.is-active {
 	background-color: var(--background-modifier-hover);
 	color: var(--text-normal);
 	font-weight: var(--font-medium);
 }
 
-.ptg-diff {
+.ssp-diff {
 	padding: 0;
 }
 
-.ptg-diff-line {
+.ssp-diff-line {
 	padding: 0 0.75em;
 	white-space: pre-wrap;
 	word-break: break-word;
 	tab-size: 4;
 }
 
-.ptg-diff-add {
+.ssp-diff-add {
 	background-color: rgba(var(--color-green-rgb), 0.15);
 	color: var(--text-normal);
 }
 
-.ptg-diff-remove {
+.ssp-diff-remove {
 	background-color: rgba(var(--color-red-rgb), 0.15);
 	color: var(--text-muted);
 }
 
-.ptg-diff-context {
+.ssp-diff-context {
 	color: var(--text-faint);
 }
 
-.ptg-diff-gap {
+.ssp-diff-gap {
 	margin: 0.2em 0;
 	background-color: var(--background-secondary-alt);
 	color: var(--text-faint);
 	font-style: italic;
 }
 
-.ptg-stat-add {
+.ssp-stat-add {
 	color: var(--color-green);
 	font-weight: var(--font-medium);
 }
 
-.ptg-stat-remove {
+.ssp-stat-remove {
 	color: var(--color-red);
 	font-weight: var(--font-medium);
 }
 
 /* Filename field and resolved path */
 
-.ptg-filename-input {
+.ssp-filename-input {
 	flex: 1 1 12rem;
 	min-width: 0;
 	max-width: 100%;
@@ -420,7 +420,7 @@
 	font-size: var(--font-ui-smaller);
 }
 
-.ptg-path-row .ptg-value {
+.ssp-path-row .ssp-value {
 	color: var(--text-muted);
 	font-family: var(--font-monospace);
 	font-size: var(--font-ui-smaller);
@@ -428,18 +428,18 @@
 
 /* Break marker warning */
 
-.ptg-break-headline {
+.ssp-break-headline {
 	margin-bottom: 0.3em;
 	font-weight: var(--font-medium);
 }
 
-.ptg-break-details summary {
+.ssp-break-details summary {
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
 	cursor: pointer;
 }
 
-.ptg-break-preview {
+.ssp-break-preview {
 	max-height: 12rem;
 	margin-top: 0.4em;
 	background-color: var(--background-primary);
@@ -448,7 +448,7 @@
 
 /* Attachments */
 
-.ptg-attachment-source {
+.ssp-attachment-source {
 	flex: 1 1 0;
 	min-width: 0;
 	overflow: hidden;
@@ -459,14 +459,14 @@
 	white-space: nowrap;
 }
 
-.ptg-attachment-missing {
+.ssp-attachment-missing {
 	flex: 0 0 auto;
 	color: var(--text-error);
 	font-size: var(--font-ui-smaller);
 	white-space: nowrap;
 }
 
-.ptg-attachment-field {
+.ssp-attachment-field {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
@@ -474,11 +474,11 @@
 	margin-top: 0.35em;
 }
 
-.ptg-attachment-field .ptg-label {
+.ssp-attachment-field .ssp-label {
 	flex: 0 0 4.5rem;
 }
 
-.ptg-attachment-url {
+.ssp-attachment-url {
 	margin-top: 0.4em;
 	min-width: 0;
 	overflow: hidden;
@@ -491,7 +491,7 @@
 
 /* Autocomplete */
 
-.ptg-suggest {
+.ssp-suggest {
 	position: fixed;
 	z-index: var(--layer-menu, 1000);
 	max-height: 14rem;
@@ -503,7 +503,7 @@
 	box-shadow: var(--shadow-s);
 }
 
-.ptg-suggest-item {
+.ssp-suggest-item {
 	padding: 0.3em 0.6em;
 	border-radius: var(--radius-s);
 	color: var(--text-normal);
@@ -514,14 +514,14 @@
 	cursor: pointer;
 }
 
-.ptg-suggest-item:hover,
-.ptg-suggest-item.is-selected {
+.ssp-suggest-item:hover,
+.ssp-suggest-item.is-selected {
 	background-color: var(--background-modifier-hover);
 }
 
 /* Clickable known values for list properties */
 
-.ptg-chips {
+.ssp-chips {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
@@ -529,12 +529,12 @@
 	margin-top: 0.4em;
 }
 
-.ptg-chips-label {
+.ssp-chips-label {
 	color: var(--text-faint);
 	font-size: var(--font-ui-smaller);
 }
 
-.ptg-chip {
+.ssp-chip {
 	padding: 0.1em 0.55em;
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-l);
@@ -545,12 +545,12 @@
 	cursor: pointer;
 }
 
-.ptg-chip:hover {
+.ssp-chip:hover {
 	background-color: var(--background-modifier-hover);
 	color: var(--text-normal);
 }
 
-.ptg-remove-input {
+.ssp-remove-input {
 	width: 100%;
 	min-width: 0;
 	max-width: 100%;
@@ -564,7 +564,7 @@
  * pane edge so it no longer starts left of the section headings, and groups the
  * three steps as one thing to read instead of a wall.
  */
-.ptg-setup {
+.ssp-setup {
 	margin: 0.2em 0 1em;
 	padding: 0.9em 1.1em;
 	border: 1px solid var(--background-modifier-border);
@@ -575,31 +575,31 @@
 	line-height: 1.55;
 }
 
-.ptg-setup p {
+.ssp-setup p {
 	margin: 0;
 }
 
-.ptg-setup-steps {
+.ssp-setup-steps {
 	margin: 0.8em 0 0;
 	padding-left: 1.3em;
 }
 
-.ptg-setup-steps li {
+.ssp-setup-steps li {
 	margin-bottom: 0.5em;
 	padding-left: 0.2em;
 }
 
-.ptg-setup-steps li:last-child {
+.ssp-setup-steps li:last-child {
 	margin-bottom: 0;
 }
 
-.ptg-setup strong {
+.ssp-setup strong {
 	color: var(--text-normal);
 	font-weight: var(--font-medium);
 }
 
 /* Detail that is worth reading once but should not crowd the setup steps. */
-.ptg-details {
+.ssp-details {
 	margin: 0 0 1em;
 	padding: 0.7em 1.1em;
 	border: 1px solid var(--background-modifier-border);
@@ -607,13 +607,13 @@
 	font-size: var(--font-ui-small);
 }
 
-.ptg-details summary {
+.ssp-details summary {
 	color: var(--text-normal);
 	font-weight: var(--font-medium);
 	cursor: pointer;
 }
 
-.ptg-details p {
+.ssp-details p {
 	margin: 0.7em 0 0;
 	color: var(--text-muted);
 	line-height: 1.55;
@@ -627,20 +627,20 @@
  * field into a tall box.
  */
 @media (max-width: 600px) {
-	.ptg-summary-row > .ptg-label,
-	.ptg-attachment-field > .ptg-label {
+	.ssp-summary-row > .ssp-label,
+	.ssp-attachment-field > .ssp-label {
 		flex: 0 0 100%;
 	}
 
-	.ptg-setup,
-	.ptg-details {
+	.ssp-setup,
+	.ssp-details {
 		padding-left: 0.8em;
 		padding-right: 0.8em;
 	}
 }
 
 /* Links under a publish notice: one row, spaced apart. */
-.ptg-notice-links {
+.ssp-notice-links {
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--size-4-3);

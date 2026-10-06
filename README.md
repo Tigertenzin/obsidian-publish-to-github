@@ -5,8 +5,8 @@ site, rewriting its frontmatter properties and trimming private content on the w
 in your vault is never modified — every change applies only to the copy that lands in the
 repository.
 
-*Formerly called Publish to GitHub. Only the name changed: the plugin's ID, settings and
-commands are the same.*
+*Formerly called Publish to GitHub. Upgrading from it? See [Upgrading from Publish to
+GitHub](#upgrading-from-publish-to-github).*
 
 ## Disclosures
 
@@ -281,7 +281,7 @@ as little as possible.
 
 **Upgrading from an earlier version.** Earlier versions kept the token in plain text in
 `data.json`. On first load, the plugin moves it into secret storage under the name
-`publish-to-github-token`, checks that it reads back, and only then removes it from
+`static-site-publisher-token`, checks that it reads back, and only then removes it from
 `data.json`, with a notice saying so. If the move cannot be made, the token stays where it was
 and keeps working, and the move is tried again on the next load. On another device that syncs
 the vault, set the token once in settings after the upgrade.
@@ -376,14 +376,31 @@ all three pass.
 
 Requires Obsidian 1.11.4 or later, for its secret storage.
 
-Through [BRAT](https://github.com/TfTHacker/obsidian42-brat): add `Tigertenzin/obsidian-publish-to-github`
+Through [BRAT](https://github.com/TfTHacker/obsidian42-brat): add `Tigertenzin/obsidian-static-site-publisher`
 as a beta plugin and it installs the latest release and keeps it updated.
 
 By hand, take `main.js`, `manifest.json` and `styles.css` from a release into
-`<vault>/.obsidian/plugins/publish-to-github/`, then enable the plugin in
+`<vault>/.obsidian/plugins/static-site-publisher/`, then enable the plugin in
 *Settings → Community plugins*. During development, symlinking the repository into that path and
 running `npm run dev` is quicker — note that `main.js` is a build artifact and is not committed,
 so the repository alone is not installable.
+
+### Upgrading from Publish to GitHub
+
+Until 0.3.0 this plugin was called Publish to GitHub, with the ID `publish-to-github`. The new
+ID makes it a separate plugin as far as Obsidian is concerned, so it installs alongside the
+old one rather than replacing it:
+
+1. Install Static Site Publisher and enable it. On its first load it imports everything from
+   Publish to GitHub — the connection, property lists, break and attachment settings, and the
+   filenames your notes were last published under — and copies your access token to its own
+   secret, `static-site-publisher-token`. A notice confirms the import.
+2. Uninstall Publish to GitHub.
+3. Re-assign any hotkey you had for publishing; hotkeys belong to a plugin's ID, so the old one
+   does not carry over.
+
+The old secret, `publish-to-github-token`, is left in Obsidian's secret storage in case you need
+the old plugin again. Once you no longer do, remove it there.
 
 ## Releasing
 

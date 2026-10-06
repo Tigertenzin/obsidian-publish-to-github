@@ -1,5 +1,5 @@
 {
-  "id": "publish-to-github",
+  "id": "static-site-publisher",
   "name": "Static Site Publisher",
   "version": "0.2.2",
   "minAppVersion": "1.11.4",
