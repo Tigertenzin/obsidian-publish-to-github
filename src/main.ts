@@ -47,7 +47,7 @@ export default class PublishToGithubPlugin extends Plugin {
 
 		this.addCommand({
 			id: "publish-to-github",
-			name: "Publish to GitHub",
+			name: "Publish current note",
 			checkCallback: (checking: boolean) => {
 				const file = this.activeMarkdownFile();
 				if (!file) return false;

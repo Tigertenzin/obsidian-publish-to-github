@@ -4,6 +4,15 @@ An Obsidian plugin that publishes the active note to a GitHub repository, rewrit
 frontmatter properties and trimming private content on the way out. The note in your vault
 is never modified — every change applies only to the copy that lands in the repository.
 
+## Disclosures
+
+- **Requires a GitHub account** and a personal access token you create there, limited to the
+  one repository you publish to. See [About the token](#about-the-token).
+- **Network use:** the plugin talks only to GitHub's API, `https://api.github.com`, and only to
+  read and write files in that repository. It sends nothing anywhere else and has no telemetry.
+- **The token** is kept in Obsidian's secret storage on your device, never in your vault, and
+  never appears in a note, a commit or an error message.
+
 ## Why this exists
 
 Posts for my [Eleventy](https://www.11ty.dev/) blog get written in Obsidian anyway, so the
@@ -36,7 +45,7 @@ works the same way. Point the target folder at the site's posts directory (`src/
 
 ## The command
 
-`Publish to GitHub` (command palette) walks through:
+`Publish to GitHub: Publish current note` (command palette) walks through:
 
 1. **Review window** — the filename the post is published under, and the complete frontmatter
    of the published copy, laid out for editing. The settings decide what it starts as; from
@@ -50,6 +59,9 @@ works the same way. Point the target folder at the site's posts directory (`src/
 
 Edits in the review window apply to that one publish. Nothing there is written back to the
 note or to the settings.
+
+When the publish succeeds, the notice that says so links to the commit and to the post on
+GitHub, and stays up long enough to click either.
 
 The **filename** field starts from the *Default filename* setting — `{{slug}}.md` on a new
 install, so `My Post` is offered as `my-post.md` — and is yours to change, since posts are
@@ -129,9 +141,10 @@ width under the same setting as images), audio as `<audio src="…" controls>`, 
 plain link, `[report.pdf](…)`. The review window's alt text field becomes the player's
 screen-reader label, or the PDF's link text.
 
-**What is left alone.** Links to the web, paths already rooted at the site (`/posts/…`), note
-transclusions and non-media embeds like `![[Some Note#Heading]]` or `.base` files, and
-anything inside a fenced or inline code block.
+**What is left alone.** Links to the web, paths already rooted at the site (`/posts/…`), and
+anything inside a fenced or inline code block. Embeds of notes rather than media, like
+`![[Some Note#Heading]]` or a `.base` file, are not uploaded; they are handled with the other
+links to notes, under [Obsidian syntax](#obsidian-syntax).
 
 ## Obsidian syntax
 
@@ -167,9 +180,6 @@ Everything stays a plain text field — a suggestion is a shortcut, never a rest
 folder or property that does not exist yet can still be typed in. Matches on a prefix are
 listed before matches anywhere in the name, and arrow keys plus Enter pick one.
 
-When the publish succeeds, the notice that says so links to the commit and to the post on
-GitHub, and stays up long enough to click either.
-
 ## Republishing over an existing post
 
 When a file already exists at the target path — the usual case for a post being revised —
@@ -182,16 +192,18 @@ the second window becomes a review of the changes rather than a plain preview:
 - Publishing is relabelled **Overwrite…** and opens a third confirmation naming the file,
   the branch, and the size of the change.
 
-Two cases short-circuit the diff: an output identical to what is already there says so and
-offers nothing to change, and a file too large for GitHub to return inline cannot be diffed,
-which the window says plainly before letting you replace it.
+Two cases short-circuit the diff. When the output is identical to what is already there, the
+post is left alone: the window says so, and publishing uploads only new or changed images — or,
+when there are none, there is nothing to press. And a file too large for GitHub to return inline
+cannot be diffed, which the window says plainly before letting you replace it.
 
 The commit is made against the exact version the diff was built from. If the post — or any
-image being replaced — changes on GitHub between the diff and the confirmation, nothing is
-committed rather than quietly overwriting the newer version. Commits that only touch other
-files are no obstacle: the plugin re-checks against them and commits on top. The same goes for a file someone else created at the path after
-it was checked. Go `Back` and continue to the preview again: the plugin reads the file afresh,
-so the diff you see is against the newer version before you publish over it.
+image being replaced — changes on GitHub between the diff and the confirmation, or someone
+creates a file at a path that was free when it was checked, nothing is committed rather than
+quietly overwriting the newer version. Go `Back` and continue to the preview again: the plugin
+reads the file afresh, so the diff you see is against the newer version before you publish over
+it. Commits that only touch other files are no obstacle: the plugin re-checks against them and
+commits on top.
 
 ## Settings
 
@@ -207,6 +219,8 @@ so the diff you see is against the newer version before you publish over it.
 | Mirror vault folder structure | Append the note's folder path inside the vault to the target folder. |
 | Commit message | The commit's summary line, with placeholders, plus `{{path}}` for the post's path in the repository. |
 
+`Test` checks that the token can reach both the repository and the branch.
+
 **Placeholders**, in the default filename, the commit message and default property values:
 
 | Placeholder | Becomes |
@@ -217,8 +231,6 @@ so the diff you see is against the newer version before you publish over it.
 | `{{date:FORMAT}}` | Now, in a format of your own, as `{{date:MMMM D, YYYY}}` → `October 5, 2026`. Takes [Moment.js format tokens](https://momentjs.com/docs/#/displaying/format/), the same as Obsidian's date settings. |
 
 An unrecognised placeholder is left as written.
-
-`Test` checks that the token can reach both the repository and the branch.
 
 ### How connecting to GitHub works
 
