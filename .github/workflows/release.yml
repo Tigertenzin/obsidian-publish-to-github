@@ -57,16 +57,3 @@ jobs:
             main.js manifest.json styles.css \
             --title "$GITHUB_REF_NAME" \
             "${notes[@]}"
-
-      # The website reads the latest release when it builds, so ask its host to
-      # rebuild now. Set the host's build hook URL as the SITE_BUILD_HOOK
-      # repository secret; without it this step does nothing.
-      - name: Rebuild the website
-        env:
-          SITE_BUILD_HOOK: ${{ secrets.SITE_BUILD_HOOK }}
-        run: |
-          if [ -z "$SITE_BUILD_HOOK" ]; then
-            echo "No SITE_BUILD_HOOK secret set; skipping the website rebuild."
-            exit 0
-          fi
-          curl --fail --silent --show-error -X POST -d '{}' "$SITE_BUILD_HOOK"
