@@ -150,7 +150,7 @@ export default class PublishToGithubPlugin extends Plugin {
 		}
 
 		new Notice(
-			"Publish to GitHub moved your access token out of data.json into Obsidian's secret storage. Secrets are kept per device: on any other device you publish from, set the token once in the plugin settings.",
+			"Static Site Publisher moved your access token out of data.json into Obsidian's secret storage. Secrets are kept per device: on any other device you publish from, set the token once in the plugin settings.",
 			15000
 		);
 	}

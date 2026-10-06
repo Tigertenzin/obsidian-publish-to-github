@@ -1,8 +1,12 @@
-# Publish to GitHub
+# Static Site Publisher
 
-An Obsidian plugin that publishes the active note to a GitHub repository, rewriting its
-frontmatter properties and trimming private content on the way out. The note in your vault
-is never modified — every change applies only to the copy that lands in the repository.
+An Obsidian plugin that publishes the active note to the GitHub repository behind a static
+site, rewriting its frontmatter properties and trimming private content on the way out. The note
+in your vault is never modified — every change applies only to the copy that lands in the
+repository.
+
+*Formerly called Publish to GitHub. Only the name changed: the plugin's ID, settings and
+commands are the same.*
 
 ## Disclosures
 
@@ -45,7 +49,7 @@ works the same way. Point the target folder at the site's posts directory (`src/
 
 ## The command
 
-`Publish to GitHub: Publish current note` (command palette) walks through:
+`Static Site Publisher: Publish current note` (command palette) walks through:
 
 1. **Review window** — the filename the post is published under, and the complete frontmatter
    of the published copy, laid out for editing. The settings decide what it starts as; from
